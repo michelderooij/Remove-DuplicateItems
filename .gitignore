@@ -1,6 +1,8 @@
 # General
+.vscode
 *.DS_Store
 Microsoft.Exchange.WebServices.Auth.dll
 Microsoft.Exchange.WebServices.Auth.xml
 Microsoft.Exchange.WebServices.dll
 Microsoft.Exchange.WebServices.xml
+test.ps1

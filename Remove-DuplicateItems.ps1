@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 1.84, December 6th, 2017
+    Version 1.85, June 15th, 2018
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -73,6 +73,7 @@
     1.83    Added Report switch
             Added EWS Managed API DLL version reporting (Verbose)
     1.84    Added X-AnchorMailbox for impersonation requests
+    1.85    Added Body option for Mode
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -125,6 +126,8 @@
               - Mail: Subject, Internet Message ID, DateTimeSent,
                 DateTimeReceived, Sender, Size
               - Other: Subject, DateTimeReceived, Size
+    - Body:   Removes duplicate items with matching Body attribute.
+
     When NoSize is used in Full mode, Size is not used as criteria.
 
     Note that when Quick mode is used and PidTagSearchKey is missing or
@@ -246,7 +249,7 @@ param(
     [parameter( Mandatory = $false, ParameterSetName = "All")]
     [System.Management.Automation.PsCredential]$Credentials,
     [parameter( Mandatory = $false, ParameterSetName = "All")]
-    [ValidateSet("Quick", "Full")]
+    [ValidateSet("Quick", "Full", "Body")]
     [string]$Mode = 'Quick',
     [parameter( Mandatory = $false, ParameterSetName = "All")]
     [parameter( Mandatory = $false, ParameterSetName = "MailboxOnly")]
@@ -751,7 +754,8 @@ process {
             $Desc,
             $IncludeFilter,
             $ExcludeFilter,
-            $PriorityFilter
+            $PriorityFilter,
+            $EwsService
         )
 
         $ProcessingOK = $True
@@ -763,7 +767,7 @@ process {
         $FoldersProcessed = 0
         $TimeProcessingStart = Get-Date
         $DeletedItemsFolder = myEWSBind-WellKnownFolder $EwsService 'DeletedItems'
-        $PidTagSearchKey = New-Object Microsoft.Exchange.WebServices.Data.ExtendedPropertyDefinition(0x300B, [Microsoft.Exchange.WebServices.Data.MapiPropertyType]::Binary)
+        $PidTagSearchKey = New-Object Microsoft.Exchange.WebServices.Data.ExtendedPropertyDefinition( 0x300B, [Microsoft.Exchange.WebServices.Data.MapiPropertyType]::Binary)
 
         # Build list of folders to process
         Write-Verbose ('Collecting folders to process, type {0}' -f $Type)
@@ -824,10 +828,20 @@ process {
                         Write-Progress -Id 2 -Activity "Processing folder $($SubFolder.Name)" -Status "Finding duplicate items, checked $TotalFolder, found $TotalDuplicates"
                     }
                     If ( $ItemSearchResults.Items.Count -gt 0) {
+			If( $ThisMailboxMode -ne 'Quick') {
+                            # Fetch properties for found items to conduct matching
+                            $EwsService.LoadPropertiesForItems( $ItemSearchResults.Items, $ItemView.PropertySet)  
+                        }
+
                         ForEach ( $Item in $ItemSearchResults.Items) {
                             Write-Debug "Inspecting item $($Item.Subject) of $($Item.DateTimeReceived), modified $($Item.LastModifiedTime)"
                             $TotalFolder++
                             $TotalMatch++
+                            if ($ThisMailboxMode -eq 'Body'){
+                                # Use PR_MESSAGE_BODY for matching duplicates
+                                $key = $Item.Body
+#$key
+                            }
                             if ($ThisMailboxMode -eq 'Quick') {
                                 # Use PidTagSearchKey for matching duplicates
                                 $PropVal = $null
@@ -1065,7 +1079,7 @@ process {
                 $RootFolder = myEWSBind-WellKnownFolder $EwsService 'MsgFolderRoot'
                 If ( $RootFolder) {
                     Write-Verbose ('Processing primary mailbox {0}' -f $Identity)
-                    If (! ( Process-Mailbox -Folder $RootFolder -Desc 'Mailbox' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter)) {
+                    If (! ( Process-Mailbox -Folder $RootFolder -Desc 'Mailbox' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService)) {
                         Write-Error ('Problem processing primary mailbox of {0} ({1})' -f $CurrentIdentity, $EmailAddress)
                         Exit $ERR_PROCESSINGMAILBOX
                     }
@@ -1082,7 +1096,7 @@ process {
                 $ArchiveRootFolder = myEWSBind-WellKnownFolder $EwsService 'ArchiveMsgFolderRoot'
                 If ( $ArchiveRootFolder) {
                     Write-Verbose ('Processing archive mailbox {0}' -f $Identity)
-                    If (! ( Process-Mailbox -Folder $ArchiveRootFolder -Desc 'Archive' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter)) {
+                    If (! ( Process-Mailbox -Folder $ArchiveRootFolder -Desc 'Archive' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService)) {
                         Write-Error ('Problem processing archive mailbox of {0} ({1})' -f $CurrentIdentity, $EmailAddress)
                         Exit $ERR_PROCESSINGARCHIVE
                     }
