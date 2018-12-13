@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 1.86, November 17th, 2018
+    Version 1.87, December 13th, 2018
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -75,6 +75,7 @@
     1.84    Added X-AnchorMailbox for impersonation requests
     1.85    Added Body option for Mode
     1.86    Fixed issue with processing delegate mailboxes using Full Access permissions
+    1.87    Fixed Examples
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -197,13 +198,13 @@
     Use this switch to prevent displaying a progress bar as folders and items are being processed.
 
     .EXAMPLE
-    .\Remove-DuplicateItems.ps1 -Mailbox Francis -Type All -Impersonation -DeleteMode SoftDelete -Mode Quick -Verbose
+    .\Remove-DuplicateItems.ps1 -Identity Francis -Type All -Impersonation -DeleteMode SoftDelete -Mode Quick -Verbose
 
     Check Francis' mailbox for duplicate items in each folder, soft deleting
     duplicates, matching on PidTagSearchKey and using impersonation.
 
     .EXAMPLE
-    .\Remove-DuplicateItems.ps1 -Mailbox Philip -Retain Oldest -Type Mail -Impersonation -DeleteMode MoveToDeletedItems -Mode Full -Verbose
+    .\Remove-DuplicateItems.ps1 -Identity Philip -Retain Oldest -Type Mail -Impersonation -DeleteMode MoveToDeletedItems -Mode Full -Verbose
 
     Check Philip's mailbox for duplicate task items in each folder and moves
     duplicates to the Deleted Items folder, using preset matching criteria
@@ -211,14 +212,14 @@
 
     .EXAMPLE
     $Credentials= Get-Credential
-    .\Remove-DuplicateItems.ps1 -Mailbox olrik@office365tenant.com -Credentials $Credentials
+    .\Remove-DuplicateItems.ps1 -Identity olrik@office365tenant.com -Credentials $Credentials
 
     Sets $Credentials variable. Then, check olrik@office365tenant.com's mailbox for duplicate items in each folder, using
     Credentials provided earlier.
 
     .EXAMPLE
     $Credentials= Get-Credential
-    .\Remove-DuplicateItems.ps1 -Mailbox olrik@office365tenant.com -Server outlook.office365.com -Credentials $Credentials -IncludeFolders '#Inbox#\*','\Projects\*' -ExcludeFolders 'Keep Out' -PriorityFolders '*Important*' -MailboxWide
+    .\Remove-DuplicateItems.ps1 -Identity olrik@office365tenant.com -Server outlook.office365.com -Credentials $Credentials -IncludeFolders '#Inbox#\*','\Projects\*' -ExcludeFolders 'Keep Out' -PriorityFolders '*Important*' -MailboxWide
 
     Remove duplicate items from specified mailbox in Office365 using fixed Server FQDN - bypassing AutoDiscover, limiting
     operation against the Inbox, and top Projects folder, and all of their subfolders, but excluding any folder named Keep Out.
