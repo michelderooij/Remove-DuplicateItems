@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 1.87, December 13th, 2018
+    Version 1.88, February 9th, 2020
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -76,6 +76,7 @@
     1.85    Added Body option for Mode
     1.86    Fixed issue with processing delegate mailboxes using Full Access permissions
     1.87    Fixed Examples
+    1.88    Fixed bug in folder selection process
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -702,8 +703,8 @@ process {
             Else {
                 $FolderSearchResults = myEWSFind-FoldersNoSearch $EwsService $Folder.Id $FolderView
             }
-            ForEach ( $Folder in $FolderSearchResults) {
-                $FolderPath = '{0}\{1}' -f $CurrentPath, $Folder.DisplayName
+            ForEach ( $FolderItem in $FolderSearchResults) {
+                $FolderPath = '{0}\{1}' -f $CurrentPath, $FolderItem.DisplayName
                 If ( $IncludeFilter) {
                     $Add = $false
                     # Defaults to true, unless include does not specifically include subfolders
@@ -738,13 +739,13 @@ process {
                     $Obj = New-Object -TypeName PSObject -Property @{
                         'Name'     = $FolderPath;
                         'Priority' = $Prio;
-                        'Folder'   = $Folder
+                        'Folder'   = $FolderItem
                     }
                     $FoldersToProcess.Add( $Obj) | Out-Null
                 }
                 If ( $Subs) {
                     # Could be that specific folder is to be excluded, but subfolders needs evaluation
-                    ForEach ( $AddFolder in (Get-SubFolders -Folder $Folder -CurrentPath $FolderPath -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter)) {
+                    ForEach ( $AddFolder in (Get-SubFolders -Folder $FolderItem -CurrentPath $FolderPath -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter)) {
                         $FoldersToProcess.Add( $AddFolder)  | Out-Null
                     }
                 }
