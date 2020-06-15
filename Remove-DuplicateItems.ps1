@@ -9,7 +9,11 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 1.88, February 9th, 2020
+    Version 1.88RG1, June 15th, 2020
+
+    <<1.86rg2 minor modifications Rob Gray  19th Nov 2018 to process public folder tree
+		1.88rg1  updated to base 1.88 version. some cleanup to help me understand PS code
+	 >>
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -77,6 +81,8 @@
     1.86    Fixed issue with processing delegate mailboxes using Full Access permissions
     1.87    Fixed Examples
     1.88    Fixed bug in folder selection process
+	
+	1.88RG1   modified to process public folders below root.
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -140,6 +146,12 @@
     .PARAMETER MailboxOnly
     Only process primary mailbox of specified users. You als need to use this parameter when
     running against mailboxes on Exchange Server 2007.
+	
+	.PARAMETER PublicFolders	<<RG2>>
+	If this switch is present, then public folders will be processed instead of the user's mailbox, starting at nominated folder
+
+	.PARAMETER PFStart		<<RG2>>
+	Used with PublicFolders switch , this nominates the starting folder location below "All Public Folders" [IPM_Subtree]  eg _Projects\Admin
 
     .PARAMETER ArchiveOnly
     Only process personal archives of specified users.
@@ -226,6 +238,15 @@
     operation against the Inbox, and top Projects folder, and all of their subfolders, but excluding any folder named Keep Out.
     Duplicates are checked over all folders, but priority is given to folders containing the word Important, causing items in
     those folders to be kept over items in other folders when duplicates are found.
+	
+    ----<<RG2>>---------
+    .\RemDup188rg2.ps1 -Identity FileMail -PublicFolders -PFStart "_Projects\2005" -Credentials $Credentials -Impersonation -Report -Force
+	    Remove duplicates from Public folder tree. the nominated mailbox needs delete rights for all folders. 
+		Credentials must work for the nominated mailbox.
+    [PS] C:\WINDOWS\system32>New-ManagementRoleAssignment -name:impersonationAssignmentName -Role:ApplicationImpersonation -User:FileMail
+    --------------------
+
+	
 #>
 
 [cmdletbinding(
@@ -236,44 +257,68 @@ param(
     [parameter( Position = 0, Mandatory = $true, ValueFromPipelineByPropertyName = $true, ParameterSetName = "All")]
     [alias('Mailbox')]
     [string]$Identity,
+	
     [parameter( Position = 1, Mandatory = $false, ParameterSetName = "All")]
     [ValidateSet("Mail", "Calendar", "Contacts", "Tasks", "Notes", "Groups", "All")]
     [string]$Type = "All",
+	
     [parameter( Mandatory = $false, ParameterSetName = "All")]
     [ValidateSet("Oldest", "Newest")]
     [string]$Retain = "Newest",
+	
     [parameter( Mandatory = $false, ParameterSetName = "All")]
     [string]$Server,
+	
     [parameter( Mandatory = $false, ParameterSetName = "All")]
     [switch]$Impersonation,
+	
     [parameter( Mandatory = $false, ParameterSetName = "All")]
     [ValidateSet("HardDelete", "SoftDelete", "MoveToDeletedItems")]
     [string]$DeleteMode = 'SoftDelete',
+	
     [parameter( Mandatory = $false, ParameterSetName = "All")]
     [System.Management.Automation.PsCredential]$Credentials,
     [parameter( Mandatory = $false, ParameterSetName = "All")]
     [ValidateSet("Quick", "Full", "Body")]
     [string]$Mode = 'Quick',
+	
     [parameter( Mandatory = $false, ParameterSetName = "All")]
     [parameter( Mandatory = $false, ParameterSetName = "MailboxOnly")]
     [switch]$MailboxOnly,
+
+    [parameter( Mandatory = $false, ParameterSetName = "All")]
+    [parameter( Mandatory = $false, ParameterSetName = "PubFolders")]   
+    [switch]$PublicFolders,
+	
+	[parameter( Mandatory = $false, ParameterSetName = "All")]
+    [parameter(Mandatory=$False,HelpMessage="If this item is present, public folders searched starting folder path ", ParameterSetName = "PubFolders")]   
+    [string]$PFStart, 
+	
     [parameter( Mandatory = $false, ParameterSetName = "All")]
     [parameter( Mandatory = $false, ParameterSetName = "ArchiveOnly")]
     [switch]$ArchiveOnly,
+	
     [parameter( Mandatory = $false, ParameterSetName = "All")]
     [string[]]$IncludeFolders,
+	
     [parameter( Mandatory = $false, ParameterSetName = "All")]
     [string[]]$ExcludeFolders,
+	
     [parameter( Mandatory = $false, ParameterSetName = "All")]
     [switch]$MailboxWide,
+	
     [parameter( Mandatory = $false, ParameterSetName = "All")]
     [string[]]$PriorityFolders,
+	
     [parameter( Mandatory = $false, ParameterSetName = "All")]
     [switch]$NoSize,
+	
     [parameter( Mandatory = $false, ParameterSetName = "All")]
     [switch]$Force,
+	
     [parameter( Mandatory = $false, ParameterSetName = "All")]
     [switch]$NoProgressBar,
+	
     [parameter( Mandatory = $false, ParameterSetName = "All")]
     [switch]$Report
 )
@@ -303,6 +348,13 @@ process {
     $ERR_PROCESSINGARCHIVE = 1006
     $ERR_INVALIDCREDENTIALS = 1007
 
+    #------<<RG2>>-----------
+    if($PublicFolders)
+    {
+        $MailboxWide = $false     #force to be folder based
+    }
+    #----------------------
+	
     Function Get-EmailAddress( $Identity) {
         $address = [regex]::Match([string]$Identity, ".*@.*\..*", "IgnoreCase")
         if ( $address.Success ) {
@@ -349,7 +401,7 @@ process {
             [void][Reflection.Assembly]::LoadFile( "$EWSDLLPath\$EWSDLL")
         }
         try {
-            $Temp = [Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2007_SP1
+            $Temp = [Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2013_SP1
         }
         catch {
             Write-Error "Problem loading $EWSDLL"
@@ -593,6 +645,7 @@ process {
         $OpSuccess = $false
         $critErr = $false
         Do {
+		    $PermissionError = $false	
             Try {
                 If ( @([Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2013, [Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2013_SP1) -contains $EwsService.RequestedServerVersion) {
                     $res = $EwsService.DeleteItems( $ItemIds, $DeleteMode, $SendCancellationsMode, $AffectedTaskOccurrences, $SuppressReadReceipt)
@@ -613,6 +666,8 @@ process {
             }
             finally {
                 If ( !$critErr) { Tune-SleepTimer $OpSuccess }
+				If ($PermissionError) { Write-Warning ('Error deleting Items. likely permissions error ') }
+
             }
         } while ( !$OpSuccess -and !$critErr)
         Write-Output -NoEnumerate $res
@@ -629,7 +684,11 @@ process {
         Do {
             Try {
                 $explicitFolder= New-Object -TypeName Microsoft.Exchange.WebServices.Data.FolderId( [Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::$WellKnownFolderName, $emailAddress)  
-                $res = [Microsoft.Exchange.WebServices.Data.Folder]::Bind( $EwsService, $explicitFolder)
+
+                <# RG2 fix for public folder not accepting emailaddress #>
+                if(!$emailAddress) {$explicitFolder = [Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::$WellKnownFolderName}
+                
+				$res = [Microsoft.Exchange.WebServices.Data.Folder]::Bind( $EwsService, $explicitFolder)
                 $OpSuccess = $true
             }
             catch [Microsoft.Exchange.WebServices.Data.ServerBusyException] {
@@ -675,13 +734,101 @@ process {
         return $prio
     }
 
+#region RobGray-1	
+	function GetFolder 	{ 
+		# Return a reference to a folder specified by path 
+		param ([string]$FolderPath )
+
+		try 
+		{ 
+			if ($PublicFolders) 
+			{ 
+				$mbx = "" 
+                $Folder = [Microsoft.Exchange.WebServices.Data.Folder]::Bind( $EwsService, [Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::PublicFoldersRoot)
+			} 
+			else 
+			{ 
+				$mbx = New-Object Microsoft.Exchange.WebServices.Data.Mailbox( $Mailbox ) 
+				if ($Archive) 
+				{ 
+					$folderId = New-Object Microsoft.Exchange.WebServices.Data.FolderId([Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::ArchiveMsgFolderRoot, $mbx ) 
+				} 
+				else 
+				{ 
+					$folderId = New-Object Microsoft.Exchange.WebServices.Data.FolderId([Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::MsgFolderRoot, $mbx ) 
+				} 
+				$Folder = [Microsoft.Exchange.WebServices.Data.Folder]::Bind($global:service, $folderId) 
+			} 
+		} 
+		catch 
+		{ 
+			Write-Host "Failed to bind to root folder: $($Error[0])" -ForegroundColor Red 
+			Write-Host "This could be due to lack of permissions to the mailbox, or invalid credentials." -ForegroundColor Gray 
+			exit 
+		} 
+	 
+	    
+		if ($FolderPath -ne '\') 
+		{ 
+            #Split the Search path into an array  
+            $fldArray = $FolderPath.Split("\") 
+            #Loop through the Split Array and do a Search for each level of folder 
+            for ($lint = 0; $lint -lt $fldArray.Length; $lint++) 
+            { 
+                $fldArray[$lint] 
+                #Perform search based on the displayname of each folder level 
+                $fvFolderView = new-object Microsoft.Exchange.WebServices.Data.FolderView(1) 
+                $SfSearchFilter = new-object Microsoft.Exchange.WebServices.Data.SearchFilter+IsEqualTo([Microsoft.Exchange.WebServices.Data.FolderSchema]::DisplayName,$fldArray[$lint]) 
+                $findFolderResults = $EwsService.FindFolders($Folder.Id,$SfSearchFilter,$fvFolderView) 
+                if ($findFolderResults.TotalCount -gt 0){ 
+                    foreach($subfolder in $findFolderResults.Folders){ 
+                        $Folder = $subfolder                
+                    } 
+                } 
+                else{ 
+                    "Error Folder Not Found"  
+                    $Folder = $null  
+                    break  
+                }     
+            }  
+			
+		} 
+		$res = $Folder
+		Write-Output -NoEnumerate $res
+	} 
+	
+	Function Get-SubFolder {
+		param (
+			$ParentFolder,
+			$sFolderName
+		)
+		$FolderView = New-Object Microsoft.Exchange.WebServices.Data.FolderView( 1)
+		#$FolderView.Traversal = [Microsoft.Exchange.WebServices.Data.FolderTraversal]::Shallow
+        #$FolderView.PropertySet = New-Object Microsoft.Exchange.WebServices.Data.PropertySet(
+        #    [Microsoft.Exchange.WebServices.Data.BasePropertySet]::IdOnly,
+        #    [Microsoft.Exchange.WebServices.Data.FolderSchema]::DisplayName)
+		$SearchFilter = New-Object Microsoft.Exchange.WebServices.Data.SearchFilter+IsEqualTo([Microsoft.Exchange.WebServices.Data.FolderSchema]::DisplayName, $sFolderName) 
+        $FolderResults = myEWSFind-Folders $EwsService $ParentFolder.Id $SearchFilter $FolderView
+		#$FolderResults = $ParentFolder.FindFolders($SearchFilter, $FolderView) 
+		if ($FolderResults.TotalCount -ne 1) 
+		{
+			$Folder = $null
+			break
+		}
+		else { $Folder = $FolderResults[0]}
+		
+		return $Folder
+	}
+#endregion							  
+
     Function Get-SubFolders {
         param(
             $Folder,
             $CurrentPath,
             $IncludeFilter,
             $ExcludeFilter,
-            $PriorityFilter
+            $PriorityFilter,
+			$EwsService
         )
         $FoldersToProcess = [System.Collections.ArrayList]@()
         $FolderView = New-Object Microsoft.Exchange.WebServices.Data.FolderView( $MaxFolderBatchSize)
@@ -744,8 +891,8 @@ process {
                     $FoldersToProcess.Add( $Obj) | Out-Null
                 }
                 If ( $Subs) {
-                    # Could be that specific folder is to be excluded, but subfolders needs evaluation
-                    ForEach ( $AddFolder in (Get-SubFolders -Folder $FolderItem -CurrentPath $FolderPath -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter)) {
+                    # Could be that specific folder is to be excluded, but subfolders needs evaluation     #<<RG2
+                    ForEach ( $AddFolder in (Get-SubFolders -Folder $FolderItem -CurrentPath $FolderPath -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService)) {
                         $FoldersToProcess.Add( $AddFolder)  | Out-Null
                     }
                 }
@@ -778,8 +925,9 @@ process {
         $PidTagSearchKey = New-Object Microsoft.Exchange.WebServices.Data.ExtendedPropertyDefinition( 0x300B, [Microsoft.Exchange.WebServices.Data.MapiPropertyType]::Binary)
 
         # Build list of folders to process
-        Write-Verbose ('Collecting folders to process, type {0}' -f $Type)
-        $FoldersToProcess = Get-SubFolders -Folder $Folder -CurrentPath '' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter
+        Write-Verbose ('Collecting folders to process, type {0}' -f $Type)	
+		
+        $FoldersToProcess = Get-SubFolders -Folder $Folder -CurrentPath '' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter  -EwsService $EwsService   #<<RG2
 
         $FoldersFound = $FoldersToProcess.Count
         Write-Verbose ('Found {0} folders that match search criteria' -f $FoldersFound)
@@ -823,10 +971,10 @@ process {
                     $ItemIds = [activator]::createinstance(([type]'System.Collections.Generic.List`1').makegenerictype([Microsoft.Exchange.WebServices.Data.ItemId]))
                 }
                 Else {
-                    $type = ("System.Collections.Generic.List" + '`' + "1") -as 'Type'
-                    $type = $type.MakeGenericType([Microsoft.Exchange.WebServices.Data.ItemId] -as 'Type')
-                    $ItemIds = [Activator]::CreateInstance($type)
-                }
+                    $type = ('System.Collections.Generic.List`1') -as 'Type';
+                    $type = $type.MakeGenericType([Microsoft.Exchange.WebServices.Data.ItemId] -as 'Type');
+                    $ItemIds = [Activator]::CreateInstance($type);
+                };
                 Do {
                     $SendCancellationsMode = $null
                     $AffectedTaskOccurrences = [Microsoft.Exchange.WebServices.Data.AffectedTaskOccurrence]::AllOccurrences
@@ -836,7 +984,7 @@ process {
                         Write-Progress -Id 2 -Activity "Processing folder $($SubFolder.Name)" -Status "Finding duplicate items, checked $TotalFolder, found $TotalDuplicates"
                     }
                     If ( $ItemSearchResults.Items.Count -gt 0) {
-			If( $ThisMailboxMode -ne 'Quick') {
+						If( $ThisMailboxMode -ne 'Quick') {
                             # Fetch properties for found items to conduct matching
                             $EwsService.LoadPropertiesForItems( $ItemSearchResults.Items, $ItemView.PropertySet)  
                         }
@@ -848,7 +996,7 @@ process {
                             if ($ThisMailboxMode -eq 'Body'){
                                 # Use PR_MESSAGE_BODY for matching duplicates
                                 $key = $Item.Body
-#$key
+								#$key
                             }
                             if ($ThisMailboxMode -eq 'Quick') {
                                 # Use PidTagSearchKey for matching duplicates
@@ -1017,13 +1165,15 @@ process {
     set-TrustAllWeb
 
     If ( $MailboxOnly) {
-        $ExchangeVersion = [Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2007_SP1
+        $ExchangeVersion = [Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2010_SP1
     }
     Else {
-        $ExchangeVersion = [Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2010_SP2
+        $ExchangeVersion = [Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2013_SP1
     }
 
     $EwsService = New-Object Microsoft.Exchange.WebServices.Data.ExchangeService( $ExchangeVersion)
+	
+
     If ( $Credentials) {
         try {
             Write-Verbose ('Using credentials {0}' -f $Credentials.UserName)
@@ -1048,13 +1198,13 @@ process {
             Exit $ERR_MAILBOXNOTFOUND
         }
 
-        Write-Host ('Processing mailbox {0} ({1})' -f $CurrentIdentity, $EmailAddress)
-
-        If ( $Impersonation) {
-            Write-Verbose ('Using {0} for impersonation' -f $EmailAddress)
-            $EwsService.ImpersonatedUserId = New-Object Microsoft.Exchange.WebServices.Data.ImpersonatedUserId([Microsoft.Exchange.WebServices.Data.ConnectingIdType]::SmtpAddress, $EmailAddress)
-            $EwsService.HttpHeaders.Add("X-AnchorMailbox", $EmailAddress)
-        }
+        if($PublicFolders)     #<<RG2
+        {   Write-Host ('Processing Public folders [{0}] as {1} {2} ' -f $PFStart, $CurrentIdentity, $EmailAddress)}
+        else
+        {
+            Write-Host ('Processing mailbox {0} ({1})' -f $CurrentIdentity, $EmailAddress)
+        }			
+		
 
         If ($Server) {
             $EwsUrl = ('https://{0}/EWS/Exchange.asmx' -f $Server)
@@ -1076,13 +1226,51 @@ process {
             Write-Verbose ('Using EWS on CAS {0}' -f $EwsService.Url)
         }
 
+
+        If ( $Impersonation) {
+            Write-Host ('Using {0} for impersonation ' -f $EmailAddress )
+			#$impid = New-Object -TypeName 'Microsoft.Exchange.WebServices.Data.ImpersonatedUserId' -ArgumentList "SmtpAddress", $EmailAddress
+			$impid = New-Object Microsoft.Exchange.WebServices.Data.ImpersonatedUserId([Microsoft.Exchange.WebServices.Data.ConnectingIdType]::SmtpAddress, $EmailAddress)
+
+            $EwsService.ImpersonatedUserId = New-Object Microsoft.Exchange.WebServices.Data.ImpersonatedUserId([Microsoft.Exchange.WebServices.Data.ConnectingIdType]::SmtpAddress, $EmailAddress)
+            $EwsService.HttpHeaders.Add("X-AnchorMailbox", $EmailAddress)
+        }
+
         # Construct search filters
         Write-Verbose 'Constructing folder matching rules'
         $IncludeFilter = Construct-FolderFilter $EwsService $IncludeFolders $EmailAddress
         $ExcludeFilter = Construct-FolderFilter $EwsService $ExcludeFolders $EmailAddress
         $PriorityFilter = Construct-FolderFilter $EwsService $PriorityFolders $EmailAddress
 
-        If ( -not $ArchiveOnly.IsPresent) {
+ 		##robg  get folder
+		
+		if ( $PublicFolders.IsPresent)
+		{
+		    try {
+                $RootFolder = myEWSBind-WellKnownFolder $EwsService 'PublicFoldersRoot' 
+                If ( $RootFolder) {
+                    Write-Verbose ('Processing public folders')
+					
+					$RootFolder = GetFolder $PFStart
+					
+                    if($RootFolder -eq $null)
+                    {
+                        Write-Error ('Problem processing accessing {0}' -f $PFStart)
+                        Exit $ERR_PROCESSINGMAILBOX
+                    }
+
+                    If (! ( Process-Mailbox -Folder $RootFolder -Desc 'Mailbox' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService)) {
+                        Write-Error ('Problem processing public folders')
+                        Exit $ERR_PROCESSINGMAILBOX
+                    }
+                }
+            }
+            catch {
+                Write-Error ('Cannot access pubfolder information store, error: {0}' -f $Error[0])
+                Exit $ERR_CANTACCESSMAILBOXSTORE
+            }
+		}					  
+        If ( -not $ArchiveOnly.IsPresent -AND -not $PublicFolders.IsPresent) {
             try {
                 $RootFolder = myEWSBind-WellKnownFolder $EwsService 'MsgFolderRoot' $EmailAddress
                 If ( $RootFolder) {
@@ -1099,7 +1287,7 @@ process {
             }
         }
 
-        If ( -not $MailboxOnly.IsPresent) {
+        If ( -not $MailboxOnly.IsPresent -AND -not $PublicFolders.IsPresent) {
             try {
                 $ArchiveRootFolder = myEWSBind-WellKnownFolder $EwsService 'ArchiveMsgFolderRoot' $EmailAddress
                 If ( $ArchiveRootFolder) {
