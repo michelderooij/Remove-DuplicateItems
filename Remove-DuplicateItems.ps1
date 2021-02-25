@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 2.00, February 24th 2021
+    Version 2.01, February 25th 2021
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -29,9 +29,9 @@
     .NOTES
     Microsoft Exchange Web Services (EWS) Managed API 1.2 or up is required.
     Recommended EWS.WebServices.Managed.Api (see https://eightwone.com/2020/10/05/ews-webservices-managed-api)
-
-    Search order for Microsoft.Exchange.WebServices.dll: 
-    Script Folder, EWS.WebServices.Managed.Api (package), EWS Managed API (install)
+    For OAuth, Microsoft Authentication are required.
+    
+    Search order for DLL's is script Folder then installed packages.
 
     Revision History
     --------------------------------------------------------------------------------
@@ -89,6 +89,7 @@
             Replaced all strings with var-subsitution with -f 
             Added certificate authentication example
             Small performance tweaks here and there
+    2.01    Fixed verification of loading Microsoft.Identity.Client
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -599,6 +600,7 @@ begin {
                 Write-Verbose ('Loading module {0}' -f $absoluteFileName)
                 try {
                     Import-Module -Name $absoluteFileName -Global -Force
+                    Start-Sleep 1
                 }
                 catch {
                     Write-Error ('Problem loading module {0}: {1}' -f $Name, $error[0])
@@ -614,7 +616,7 @@ begin {
                     }
                 }
                 Catch {
-                    Write-Error ('Problem initializing test-object from module {0}: {1}' -f $Name, $error[0])
+                    Write-Error ('Problem initializing test-object from module {0}: {1}' -f $Name, $_.Exception.Message)
                     Exit $ERR_DLLLOADING
                 }
             }
@@ -1298,7 +1300,7 @@ begin {
     ### MAIN ROUTINE ###
    
     Import-ModuleDLL -Name 'Microsoft.Exchange.WebServices' -FileName 'Microsoft.Exchange.WebServices.dll' -Package 'Exchange.WebServices.Managed.Api' -validateObjName 'Microsoft.Exchange.WebServices.Data.ExchangeVersion'
-    Import-ModuleDLL -Name 'Microsoft.Identity.Client' -FileName 'Microsoft.Identity.Client.dll' -Package 'Microsoft.Identity.Client' -validateObjName 'Microsoft.Identity.Client.ConfidentialClientApplicationBuilder'
+    Import-ModuleDLL -Name 'Microsoft.Identity.Client' -FileName 'Microsoft.Identity.Client.dll' -Package 'Microsoft.Identity.Client' -validateObjName 'Microsoft.Identity.Client.TokenCache'
 
     If ( $MailboxOnly) {
         $ExchangeVersion= [Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2007_SP1
