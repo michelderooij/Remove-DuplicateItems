@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 2.01, February 25th 2021
+    Version 2.02, February 27th 2021
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -90,6 +90,7 @@
             Added certificate authentication example
             Small performance tweaks here and there
     2.01    Fixed verification of loading Microsoft.Identity.Client
+    2.02    Determine DeletedItems once per mailbox, not for every folder to process
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -299,7 +300,7 @@ param(
     [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
     [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
     [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [ValidateSet( 'Mail', 'Calendar', 'Contacts', 'Tasks', 'Notes', 'Groups', 'All')]
+    [ValidateSet( 'Mail', 'Calendar', 'Contacts', 'Tasks', 'Notes', 'All')]
     [string]$Type= 'All',
     [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
     [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
@@ -582,8 +583,8 @@ begin {
             # OK
         }
         Else {
-        If( $Package) {
-            If( Get-Command -Name Get-Package -ErrorAction SilentlyContinue) {
+            If( $Package) {
+                If( Get-Command -Name Get-Package -ErrorAction SilentlyContinue) {
                     If( Get-Package -Name -ErrorAction SilentlyContinue) {
                         $AbsoluteFileName= (Get-ChildItem -ErrorAction SilentlyContinue -Path (Split-Path -Parent (get-Package -Name $Package | -Object -Property Version -Descending | Select-Object -First 1).Source) -Filter $FileName -Recurse).FullName
                     }
@@ -620,11 +621,11 @@ begin {
                     Exit $ERR_DLLLOADING
                 }
             }
-    }
-    Else {
-        Write-Verbose ('Required module {0} could not be located' -f $FileName)
-        Exit $ERR_DLLNOTFOUND
-    }
+        }
+        Else {
+            Write-Verbose ('Required module {0} could not be located' -f $FileName)
+            Exit $ERR_DLLNOTFOUND
+        }
     }
 
     Function Set-SSLVerification {
@@ -1050,7 +1051,8 @@ begin {
             $ExcludeFilter,
             $PriorityFilter,
             $EwsService,
-            $emailAddress
+            $emailAddress,
+            $DeletedItemsFolder
         )
 
         $ProcessingOK= $True
@@ -1061,7 +1063,6 @@ begin {
         $FoldersFound= 0
         $FoldersProcessed= 0
         $TimeProcessingStart= Get-Date
-        $DeletedItemsFolder= myEWSBind-WellKnownFolder $EwsService 'DeletedItems' $emailAddress
         $PidTagSearchKey= New-Object Microsoft.Exchange.WebServices.Data.ExtendedPropertyDefinition( 0x300B, [Microsoft.Exchange.WebServices.Data.MapiPropertyType]::Binary)
 
         # Build list of folders to process
@@ -1432,7 +1433,8 @@ Process {
                 $RootFolder= myEWSBind-WellKnownFolder $EwsService 'MsgFolderRoot' $EmailAddress
                 If ($null -ne $RootFolder) {
                     Write-Verbose ('Processing primary mailbox {0}' -f $EmailAddress)
-                    If (! ( Process-Mailbox -Folder $RootFolder -Desc 'Mailbox' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService -emailAddress $emailAddress)) {
+                    $DeletedItemsFolder= myEWSBind-WellKnownFolder $EwsService 'DeletedItems' $emailAddress
+                    If (! ( Process-Mailbox -Folder $RootFolder -Desc 'Mailbox' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService -emailAddress $emailAddress -DeletedItemsFolder $DeletedItemsFolder)) {
                         Write-Error ('Problem processing primary mailbox of {0} ({1})' -f $EmailAddress, $CurrentIdentity)
                         Exit $ERR_PROCESSINGMAILBOX
                     }
@@ -1449,7 +1451,8 @@ Process {
                 $ArchiveRootFolder= myEWSBind-WellKnownFolder $EwsService 'ArchiveMsgFolderRoot' $EmailAddress
                 If ($null -ne $ArchiveRootFolder) {
                     Write-Verbose ('Processing archive mailbox {0}' -f $EmailAddress)
-                    If (! ( Process-Mailbox -Folder $ArchiveRootFolder -Desc 'Archive' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService -emailAddress $emailAddress)) {
+                    $DeletedItemsFolder= myEWSBind-WellKnownFolder $EwsService 'DeletedItems' $emailAddress
+                    If (! ( Process-Mailbox -Folder $ArchiveRootFolder -Desc 'Archive' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService -emailAddress $emailAddress -DeletedItemsFolder $DeletedItemsFolder)) {
                         Write-Error ('Problem processing archive mailbox of {0} ({1})' -f $EmailAddress, $CurrentIdentity)
                         Exit $ERR_PROCESSINGARCHIVE
                     }
