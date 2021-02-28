@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 2.02, February 27th 2021
+    Version 2.03, February 28th 2021
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -91,6 +91,9 @@
             Small performance tweaks here and there
     2.01    Fixed verification of loading Microsoft.Identity.Client
     2.02    Determine DeletedItems once per mailbox, not for every folder to process
+    2.03    Fixed accepting multiple Identity entries
+            Added CleanupMode parameter
+            Removed MailboxWide switch
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -188,10 +191,15 @@
     .PARAMETER Force
     Force removal of items without prompting.
 
-    .PARAMETER MailboxWide
-    Performs duplicate cleanup against whole mailbox, instead of per folder.
-    By default, the first unique item encountered will be retained. When an item is found in Folder A and
-    in Folder B, it is undetermined which item will be kept, unless PriorityFolders is used.
+    .PARAMETER CleanupMode
+    Options are:
+    - Folder (default) - performs duplicate cleanup per-mailbox, per-folder comparison.
+    - Mailbox - performs per-mailbox duplicate cleanup against whole mailbox, instead of per folder.
+      By default, the first unique item encountered will be retained. When an item is found in Folder A and
+      in Folder B, it is undetermined which item will be kept, unless PriorityFolders is used.
+    - MultiMailbox - When passing multiple identities, performs duplicate cleanup over multiple mailboxes. Items 
+      are evaluated sequentially, e.g. items found in the first mailbox are considered duplicate when they are located
+      in the second or later mailboxes. 
 
     .PARAMETER PriorityFolders
     Determines which folders have priority over other folders, identifying items in these folders first when
@@ -261,7 +269,7 @@
 
     .EXAMPLE
     $Secret= Read-Host 'Secret' -AsSecureString
-    Import-Csv Users.Csv | .\Remove-DuplicateItems.ps1 -Server outlook.office365.com -IncludeFolders '#Inbox#\*','\Projects\*' -ExcludeFolders 'Keep Out' -PriorityFolders '*Important*' -MailboxWide --TenantId '1ab81a53-2c16-4f28-98f3-fd251f0459f3' -ClientId 'ea76025c-592d-43f1-91f4-2dec7161cc59' -Secret $Secret
+    Import-Csv Users.Csv | .\Remove-DuplicateItems.ps1 -Server outlook.office365.com -IncludeFolders '#Inbox#\*','\Projects\*' -ExcludeFolders 'Keep Out' -PriorityFolders '*Important*' -CleanupMode Mailbox --TenantId '1ab81a53-2c16-4f28-98f3-fd251f0459f3' -ClientId 'ea76025c-592d-43f1-91f4-2dec7161cc59' -Secret $Secret
 
     Remove duplicate items from mailboxes identified by CSV file in Office365 bypassing AutoDiscover, limiting operation against the Inbox, and 
     top Projects folder, and all of their subfolders, but excluding any folder named Keep Out. Duplicates are checked over all folders, but priority is
@@ -287,7 +295,7 @@ param(
     [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
     [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'BasicAuthArchiveOnly')] 
     [alias('Mailbox')]
-    [string]$Identity,
+    [string[]]$Identity,
     [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
     [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
     [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
@@ -418,7 +426,8 @@ param(
     [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
     [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
     [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [switch]$MailboxWide,
+    [ValidateSet( 'Folder', 'Mailbox', 'MultiMailbox')]
+    [string]$CleanupMode= 'Folder',
     [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
     [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
     [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
@@ -567,6 +576,9 @@ begin {
     $ERR_INVALIDCREDENTIALS= 1007
     $ERR_PROBLEMIMPORTINGCERT= 1008
     $ERR_CERTNOTFOUND= 1009
+
+    # Initialize list to keep track of unique items
+    $global:UniqueList= [System.Collections.ArrayList]@()
 
 ### HELPER FUNCTIONS ###
 
@@ -1075,10 +1087,8 @@ begin {
         # Sort complete set of folders on Priority
         $FoldersToProcess= $FoldersToProcess | Sort-Object Priority -Descending
 
-        # Initialize list to keep track of unique items
-        $UniqueList= [System.Collections.ArrayList]@()
-
         ForEach ( $SubFolder in $FoldersToProcess) {
+
             If (!$NoProgressBar) {
                 Write-Progress -Id 1 -Activity ('Processing {0} ({1})' -f $Identity, $Desc) -Status ('Processed folder {0} or {1}' -f $FoldersProcessed, $FoldersFound) -PercentComplete ( $FoldersProcessed / $FoldersFound * 100)
             }
@@ -1100,10 +1110,6 @@ begin {
                 $ItemView.PropertySet= New-Object Microsoft.Exchange.WebServices.Data.PropertySet( [Microsoft.Exchange.WebServices.Data.BasePropertySet]::FirstClassProperties)
                 $ItemView.PropertySet.Add( $PidTagSearchKey)
 
-                # Not MailboxWide (per folder), track MD5 hashes per folder
-                If ( -not $MailboxWide) {
-                    $UniqueList= [System.Collections.ArrayList]@()
-                }
                 $DuplicateList= [System.Collections.ArrayList]@()
                 $TotalDuplicates= 0
                 $TotalFolder= 0
@@ -1201,7 +1207,7 @@ begin {
                             }
                             If ( $null -ne $key) {
                                 $hash= Get-Hash $key
-                                If ( $UniqueList.contains( $hash)) {
+                                If ( $global:UniqueList.contains( $hash)) {
                                     If ( $Report.IsPresent) {
                                         Write-Host ('Item: {0} of {1} ({2})' -f $Item.Subject, $Item.DateTimeReceived, $Item.ItemClass)
                                     }
@@ -1211,7 +1217,7 @@ begin {
                                 }
                                 Else {
                                     Write-Debug "Unique: $($Item.id), $hash ($key)"
-                                    $null= $UniqueList.Add( $hash)
+                                    $null= $global:UniqueList.Add( $hash)
                                 }
                             }
                             Else {
@@ -1280,8 +1286,9 @@ begin {
             }
 
             # If not operating against whole mailbox, clear unique list after processing every folder
-            If ( !$MailboxWide) {
-                $UniqueList= [System.Collections.ArrayList]@()
+            If ( $CleanupMode -eq 'Folder') {
+                Write-Verbose ('Cleaning unique list (finished folder)')
+                $global:UniqueList= [System.Collections.ArrayList]@()
             }
 
         } # ForEach SubFolder
@@ -1290,6 +1297,12 @@ begin {
             Write-Progress -Id 1 -Activity ('Processing {0}' -f $Identity) -Status 'Finished processing.' -Completed
         }
 
+        # Not MultiMailbox (per mailbox), track MD5 hashes per mailbox
+        If ( $CleanupMode -ne 'MultiMailbox' ) {
+            Write-Verbose ('Cleaning unique list (finished mailbox)')
+            $global:UniqueList= [System.Collections.ArrayList]@()
+        }
+        
         If ( $ProcessingOK) {
             $TimeProcessingDiff= (Get-Date) - $TimeProcessingStart
             $Speed= [int]( $TotalMatch / $TimeProcessingDiff.TotalSeconds * 60)
@@ -1377,6 +1390,8 @@ begin {
             Exit $ERR_INVALIDCREDENTIALS
         }
     }
+
+    Write-Verbose ('Cleanup Mode: {0}' -f $CleanupMode)
 
     If( $TrustAll) {
         Set-SSLVerification -Disable
