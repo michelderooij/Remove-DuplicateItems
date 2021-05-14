@@ -25,28 +25,28 @@ if(!$Credentials)
 	$Credentials= Get-Credential;
 }
 
-# & $RDup -Identity FileMail -PublicFolders -PFStart "_Projects\2004" -Credentials $Credentials -Impersonation -Report -Force
-& $RDup -Identity FileMail -PublicFolders -PFStart "_Projects\2005" -Credentials $Credentials -Impersonation -Report -Force
-& $RDup -Identity FileMail -PublicFolders -PFStart "_Projects\2006" -Credentials $Credentials -Impersonation -Report -Force
-& $RDup -Identity FileMail -PublicFolders -PFStart "_Projects\2007" -Credentials $Credentials -Impersonation -Report -Force
+# & $RDup -Identity boss -PublicFolders -PFStart "_Projects\2004" -Credentials $Credentials -Impersonation -Report -Force
+& $RDup -Identity boss -PublicFolders -PFStart "_Projects\2005" -Credentials $Credentials -Impersonation -Report -Force
+& $RDup -Identity boss -PublicFolders -PFStart "_Projects\2006" -Credentials $Credentials -Impersonation -Report -Force
+& $RDup -Identity boss -PublicFolders -PFStart "_Projects\2007" -Credentials $Credentials -Impersonation -Report -Force
 
-& $RDup -Identity FileMail -PublicFolders -PFStart "_Projects\2008" -Credentials $Credentials -Impersonation -Report -Force
-# & $RDup -Mailbox FileMail -PublicFolders -PFStart "_Projects\2009" -Credentials $Credentials -Impersonation -Report -Force
-& $RDup -Identity FileMail -PublicFolders -PFStart "_Projects\2010" -Credentials $Credentials -Impersonation -Report -Force
+& $RDup -Identity boss -PublicFolders -PFStart "_Projects\2008" -Credentials $Credentials -Impersonation -Report -Force
+# & $RDup -Mailbox boss -PublicFolders -PFStart "_Projects\2009" -Credentials $Credentials -Impersonation -Report -Force
+& $RDup -Identity boss -PublicFolders -PFStart "_Projects\2010" -Credentials $Credentials -Impersonation -Report -Force
 
-& $RDup -Identity FileMail -PublicFolders -PFStart "_Projects\2011" -Credentials $Credentials -Impersonation -Report -Force
-& $RDup -Identity FileMail -PublicFolders -PFStart "_Projects\2012" -Credentials $Credentials -Impersonation -Report -Force
-& $RDup -Identity FileMail -PublicFolders -PFStart "_Projects\2013" -Credentials $Credentials -Impersonation -Report -Force
-& $RDup -Identity FileMail -PublicFolders -PFStart "_Projects\2014" -Credentials $Credentials -Impersonation -Report -Force
-& $RDup -Identity FileMail -PublicFolders -PFStart "_Projects\2015" -Credentials $Credentials -Impersonation -Report -Force
+& $RDup -Identity boss -PublicFolders -PFStart "_Projects\2011" -Credentials $Credentials -Impersonation -Report -Force
+& $RDup -Identity boss -PublicFolders -PFStart "_Projects\2012" -Credentials $Credentials -Impersonation -Report -Force
+& $RDup -Identity boss -PublicFolders -PFStart "_Projects\2013" -Credentials $Credentials -Impersonation -Report -Force
+& $RDup -Identity boss -PublicFolders -PFStart "_Projects\2014" -Credentials $Credentials -Impersonation -Report -Force
+& $RDup -Identity boss -PublicFolders -PFStart "_Projects\2015" -Credentials $Credentials -Impersonation -Report -Force
 
-& $RDup -Identity FileMail -PublicFolders -PFStart "_Projects\2016" -Credentials $Credentials -Impersonation -Report -Force
-& $RDup -Identity FileMail -PublicFolders -PFStart "_Projects\2017" -Credentials $Credentials -Impersonation -Report -Force
-& $RDup -Identity FileMail -PublicFolders -PFStart "_Projects\2018" -Credentials $Credentials -Impersonation -Report -Force
-& $RDup -Identity FileMail -PublicFolders -PFStart "_Projects\2019" -Credentials $Credentials -Impersonation -Report -Force
-& $RDup -Identity FileMail -PublicFolders -PFStart "_Projects\2020" -Credentials $Credentials -Impersonation -Report -Force
+& $RDup -Identity boss -PublicFolders -PFStart "_Projects\2016" -Credentials $Credentials -Impersonation -Report -Force
+& $RDup -Identity boss -PublicFolders -PFStart "_Projects\2017" -Credentials $Credentials -Impersonation -Report -Force
+& $RDup -Identity boss -PublicFolders -PFStart "_Projects\2018" -Credentials $Credentials -Impersonation -Report -Force
+& $RDup -Identity boss -PublicFolders -PFStart "_Projects\2019" -Credentials $Credentials -Impersonation -Report -Force
+& $RDup -Identity boss -PublicFolders -PFStart "_Projects\2020" -Credentials $Credentials -Impersonation -Report -Force
 
-& $RDup -Identity FileMail -PublicFolders -PFStart "_Projects\2021" -Credentials $Credentials -Impersonation -Report -Force
+& $RDup -Identity boss -PublicFolders -PFStart "_Projects\2021" -Credentials $Credentials -Impersonation -Report -Force
 
 
 Write-Output " "
