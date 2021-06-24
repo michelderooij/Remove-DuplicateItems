@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 2.03, February 28th 2021
+    Version 2.04, June 24th, 2021
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -94,6 +94,7 @@
     2.03    Fixed accepting multiple Identity entries
             Added CleanupMode parameter
             Removed MailboxWide switch
+    2.04    Fixed loading of module when using installed NuGet packages
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -596,8 +597,8 @@ begin {
         Else {
             If( $Package) {
                 If( Get-Command -Name Get-Package -ErrorAction SilentlyContinue) {
-                    If( Get-Package -Name -ErrorAction SilentlyContinue) {
-                        $AbsoluteFileName= (Get-ChildItem -ErrorAction SilentlyContinue -Path (Split-Path -Parent (get-Package -Name $Package | -Object -Property Version -Descending | Select-Object -First 1).Source) -Filter $FileName -Recurse).FullName
+                    If( Get-Package -Name $Package -ErrorAction SilentlyContinue) {
+                        $AbsoluteFileName= (Get-ChildItem -ErrorAction SilentlyContinue -Path (Split-Path -Parent (get-Package -Name $Package | Sort-Object -Property Version -Descending | Select-Object -First 1).Source) -Filter $FileName -Recurse).FullName
                     }
                 }
             }
