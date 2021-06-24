@@ -276,7 +276,6 @@
     given to folders containing the word Important, causing items in those folders to be kept over items in other folders when duplicates are found.
     OAuth authentication is performed against indicated tenant <TenantID> using registered App <ClientID> and App secret entered.
 #>
-
 [cmdletbinding(
     SupportsShouldProcess= $true,
     ConfirmImpact= 'High'
@@ -1056,6 +1055,7 @@ begin {
     }
 
     Function Process-Mailbox {
+        [CmdletBinding(SupportsShouldProcess=$true)]
         param(
             $Folder,
             $Desc,
