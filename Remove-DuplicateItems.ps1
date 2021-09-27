@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 2.04, June 24th, 2021
+    Version 2.05, September 27th, 2021
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -95,6 +95,7 @@
             Added CleanupMode parameter
             Removed MailboxWide switch
     2.04    Fixed loading of module when using installed NuGet packages
+    2.05    Changed PropertySet constructors to prevent possible initialization issues
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -986,10 +987,9 @@ begin {
         $FoldersToProcess= [System.Collections.ArrayList]@()
         $FolderView= New-Object Microsoft.Exchange.WebServices.Data.FolderView( $MaxFolderBatchSize)
         $FolderView.Traversal= [Microsoft.Exchange.WebServices.Data.FolderTraversal]::Shallow
-        $FolderView.PropertySet= New-Object Microsoft.Exchange.WebServices.Data.PropertySet(
-            [Microsoft.Exchange.WebServices.Data.BasePropertySet]::IdOnly,
-            [Microsoft.Exchange.WebServices.Data.FolderSchema]::DisplayName,
-            [Microsoft.Exchange.WebServices.Data.FolderSchema]::FolderClass)
+        $FolderView.PropertySet= New-Object Microsoft.Exchange.WebServices.Data.PropertySet([Microsoft.Exchange.WebServices.Data.BasePropertySet]::IdOnly)
+        $FolderView.PropertySet.Add( [Microsoft.Exchange.WebServices.Data.FolderSchema]::DisplayName)
+        $FolderView.PropertySet.Add( [Microsoft.Exchange.WebServices.Data.FolderSchema]::FolderClass)
         $FolderSearchCollection= New-Object Microsoft.Exchange.WebServices.Data.SearchFilter+SearchFilterCollection( [Microsoft.Exchange.WebServices.Data.LogicalOperator]::And)
         If ( $Type -ne 'All') {
             $FolderSearchClass= (@{Mail= 'IPF.Note'; Calendar= 'IPF.Appointment'; Contacts= 'IPF.Contact'; Tasks= 'IPF.Task'; Notes= 'IPF.StickyNotes'})[$Type]
