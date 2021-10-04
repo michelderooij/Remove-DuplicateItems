@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 2.05, September 27th, 2021
+    Version 2.06, October 4th, 2021
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -96,6 +96,7 @@
             Removed MailboxWide switch
     2.04    Fixed loading of module when using installed NuGet packages
     2.05    Changed PropertySet constructors to prevent possible initialization issues
+    2.06    Fixed bracket omission when running Verbose
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -1435,7 +1436,7 @@ Process {
                 Exit $ERR_AUTODISCOVERFAILED
             }
             $ErrorActionPreference= 'Continue'
-            Write-Verbose 'Using EWS endpoint {0}' -f $EwsService.Url
+            Write-Verbose ('Using EWS endpoint {0}' -f $EwsService.Url)
         } 
 
         # Construct search filters
