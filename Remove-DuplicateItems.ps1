@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 2.06, October 4th, 2021
+    Version 2.07, October 13th, 2021
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -96,7 +96,8 @@
             Removed MailboxWide switch
     2.04    Fixed loading of module when using installed NuGet packages
     2.05    Changed PropertySet constructors to prevent possible initialization issues
-    2.06    Fixed bracket omission when running Verbose
+    2.06    Fixed parenthesis omission when running Verbose
+    2.07    Fixed handling MoveToDelete for archive mailbox
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -1468,7 +1469,7 @@ Process {
                 $ArchiveRootFolder= myEWSBind-WellKnownFolder $EwsService 'ArchiveMsgFolderRoot' $EmailAddress
                 If ($null -ne $ArchiveRootFolder) {
                     Write-Verbose ('Processing archive mailbox {0}' -f $EmailAddress)
-                    $DeletedItemsFolder= myEWSBind-WellKnownFolder $EwsService 'DeletedItems' $emailAddress
+                    $DeletedItemsFolder= myEWSBind-WellKnownFolder $EwsService 'ArchiveDeletedItems' $emailAddress
                     If (! ( Process-Mailbox -Folder $ArchiveRootFolder -Desc 'Archive' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService -emailAddress $emailAddress -DeletedItemsFolder $DeletedItemsFolder)) {
                         Write-Error ('Problem processing archive mailbox of {0} ({1})' -f $EmailAddress, $CurrentIdentity)
                         Exit $ERR_PROCESSINGARCHIVE
