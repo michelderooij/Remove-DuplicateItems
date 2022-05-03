@@ -1152,7 +1152,7 @@ begin {
         ForEach ( $SubFolder in $FoldersToProcess) {
 
             If (!$NoProgressBar) {
-                Write-Progress -Id 1 -Activity ('Processing {0} ({1})' -f $Identity, $Desc) -Status ('Processed folder {0} or {1}' -f $FoldersProcessed, $FoldersFound) -PercentComplete ( $FoldersProcessed / $FoldersFound * 100)
+                Write-Progress -Id 1 -Activity ('Processing {0} ({1})' -f $Identity, $Desc) -Status ('Processed folder {0} of {1}' -f $FoldersProcessed, $FoldersFound) -PercentComplete ( $FoldersProcessed / $FoldersFound * 100)
             }
             If ( ! ( $DeleteMode -eq 'MoveToDeletedItems' -and $SubFolder.Folder.Id -eq $DeletedItemsFolder.Id)) {
                 If ( $Report.IsPresent) {
