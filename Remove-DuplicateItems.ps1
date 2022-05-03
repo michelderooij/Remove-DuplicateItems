@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 2.10, March 6th, 2022
+    Version 2.11, May 4th, 2022
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -99,6 +99,7 @@
     2.06    Fixed parenthesis omission when running Verbose
     2.07    Fixed handling MoveToDelete for archive mailbox
     2.10    Added UseDefaultCredentials for usage on-premises (using current security context)
+    2.11    Changed class to check proper loading of Microsoft.Identity.Client module
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -1376,7 +1377,7 @@ begin {
     ### MAIN ROUTINE ###
    
     Import-ModuleDLL -Name 'Microsoft.Exchange.WebServices' -FileName 'Microsoft.Exchange.WebServices.dll' -Package 'Exchange.WebServices.Managed.Api' -validateObjName 'Microsoft.Exchange.WebServices.Data.ExchangeVersion'
-    Import-ModuleDLL -Name 'Microsoft.Identity.Client' -FileName 'Microsoft.Identity.Client.dll' -Package 'Microsoft.Identity.Client' -validateObjName 'Microsoft.Identity.Client.TokenCache'
+    Import-ModuleDLL -Name 'Microsoft.Identity.Client' -FileName 'Microsoft.Identity.Client.dll' -Package 'Microsoft.Identity.Client' -validateObjName 'Microsoft.Identity.Client.CacheOptions'
 
     If ( $MailboxOnly) {
         $ExchangeVersion= [Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2007_SP1
