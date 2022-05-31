@@ -11,8 +11,6 @@
 
     Version 2.21, May 31st, 2022
 
-    Acknowledgements: Rob Gray (PF support)
-
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
     configured, Exchange 2010 and later) and removes duplicate items per folder. You can specify
@@ -101,11 +99,11 @@
     2.10    Added UseDefaultCredentials for usage on-premises (using current security context)
     2.11    Changed class to check proper loading of Microsoft.Identity.Client module
     2.12    Changed class to check proper loading of Microsoft.Identity.Client module in PS7 with latest module
-    2.20    Added Public Folder support
+    2.20    Added Public Folder support (thanks RobGray-au)
             Refactoring to accomodate PF support
             Requires PowerShell 3 and up (removed <PF3 compatibility code)
             Removed Exchange Server 2007 support
-    2.21    Fixed display 'Mailbox' when processing Public Folders
+    2.21    Fixed progress bar text when processing Public Folders
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
