@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 2.2, May 31st, 2022
+    Version 2.21, May 31st, 2022
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -103,6 +103,7 @@
             Refactoring to accomodate PF support
             Requires PowerShell 3 and up (removed <PF3 compatibility code)
             Removed Exchange Server 2007 support
+    2.21    Fixed progress bar text when processing Public Folders
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -1623,7 +1624,7 @@ Process {
                 $RootFolder= myEWSBind-WellKnownFolder $EwsService 'PublicFoldersRoot' 
                 If ($null -ne $RootFolder) {
                     Write-Verbose ('Processing Public Folders')
-                    If (! ( Process-Mailbox -Folder $RootFolder -Desc 'Mailbox' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService -emailAddress $emailAddress)) {
+                    If (! ( Process-Mailbox -Folder $RootFolder -Desc 'Public Folders' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService -emailAddress $emailAddress)) {
                         Write-Error ('Problem processing Public Folders as {0} ({1})' -f $EmailAddress, $CurrentIdentity)
                         Exit $ERR_PROCESSINGPUBLICFOLDERS
                     }
