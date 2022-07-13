@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 2.21, May 31st, 2022
+    Version 2.22, June 13th, 2022
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -104,6 +104,8 @@
             Requires PowerShell 3 and up (removed <PF3 compatibility code)
             Removed Exchange Server 2007 support
     2.21    Fixed progress bar text when processing Public Folders
+    2.22    Added CleanUp option MailboxArchive
+            Refactoring to prevent FindItems throwing "property Hashtags is valid only for Exchange2015 or later" 
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -211,6 +213,9 @@
     - Mailbox - performs duplicate cleanup against whole mailbox or public folders, instead of per folder.
       By default, the first unique item encountered will be retained. When an item is found in Folder A and
       in Folder B, it is undetermined which item will be kept, unless PriorityFolders is used.
+      Note that if there is an online archive, this will be treated as a seperate mailbox.
+    - MailboxArchive - performs duplicate cleanup against whole mailbox and - if present - online archive.
+      Items are evaluated in mailbox-archive order, e.g. items found in the mailbox are retained over duplicates in archive.
     - MultiMailbox - When passing multiple identities, performs duplicate cleanup over multiple mailboxes. Items 
       are evaluated sequentially, e.g. items found in the first mailbox are considered duplicate when they are located
       in the second or later mailboxes. 
@@ -532,7 +537,7 @@ param(
     [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
     [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
     [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
-    [ValidateSet( 'Folder', 'Mailbox', 'MultiMailbox')]
+    [ValidateSet( 'Folder', 'Mailbox', 'MailboxArchive', 'MultiMailbox')]
     [string]$CleanupMode= 'Folder',
     [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
     [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
@@ -1260,7 +1265,7 @@ begin {
         ForEach ( $SubFolder in $FoldersToProcess) {
 
             If (!$NoProgressBar) {
-                Write-Progress -Id 1 -Activity ('Processing {0} ({1})' -f $Identity, $Desc) -Status ('Processed folder {0} of {1}' -f $FoldersProcessed, $FoldersFound) -PercentComplete ( $FoldersProcessed / $FoldersFound * 100)
+                Write-Progress -Id 1 -Activity ('Processing {0} ({1})' -f $emailAddress, $Desc) -Status ('Processed folder {0} of {1}' -f $FoldersProcessed, $FoldersFound) -PercentComplete ( $FoldersProcessed / $FoldersFound * 100)
             }
             If ( ! ( $DeleteMode -eq 'MoveToDeletedItems' -and $SubFolder.Folder.Id -eq $DeletedItemsFolder.Id)) {
                 If ( $Report.IsPresent) {
@@ -1277,7 +1282,15 @@ begin {
                 Else {
                     $ItemView.OrderBy.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::LastModifiedTime, [Microsoft.Exchange.WebServices.Data.SortDirection]::Descending)
                 }
-                $ItemView.PropertySet= New-Object Microsoft.Exchange.WebServices.Data.PropertySet( [Microsoft.Exchange.WebServices.Data.BasePropertySet]::FirstClassProperties)
+                $ItemView.PropertySet= New-Object Microsoft.Exchange.WebServices.Data.PropertySet( [Microsoft.Exchange.WebServices.Data.BasePropertySet]::IdOnly)
+                $ItemView.PropertySet.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::ItemClass)
+                $ItemView.PropertySet.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::DateTimeReceived)
+                $ItemView.PropertySet.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::Subject)
+                $ItemView.PropertySet.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::LastModifiedTime)
+                If( $ThisMailboxMode -eq 'Body') {
+                    # Only retrieve Body when we use it to determine 'uniqueness'
+                    [Microsoft.Exchange.WebServices.Data.ItemSchema]::Body
+                }
                 $ItemView.PropertySet.Add( $PidTagSearchKey)
 
                 $DuplicateList= [System.Collections.ArrayList]@()
@@ -1296,6 +1309,7 @@ begin {
                         Write-Progress -Id 2 -Activity ('Processing folder {0}' -f $SubFolder.Name) -Status ('Finding duplicate items: Checked {0}, found {1}' -f $TotalFolder, $TotalDuplicates)
                     }
                     If ( $ItemSearchResults.Items.Count -gt 0) {
+
                         If( $ThisMailboxMode -ne 'Quick') {
                             # Fetch properties for found items to conduct matching
                             $EwsService.LoadPropertiesForItems( $ItemSearchResults.Items, $ItemView.PropertySet)  
@@ -1303,6 +1317,7 @@ begin {
 
                         ForEach ( $Item in $ItemSearchResults.Items) {
                             Write-Debug ('Inspecting item {0} of {1}, modified {2}' -f $Item.Subject, $Item.DateTimeReceived, $Item.LastModifiedTime)
+
                             $TotalFolder++
                             $TotalMatch++
                             if ($ThisMailboxMode -eq 'Body'){
@@ -1453,7 +1468,7 @@ begin {
 
             # If not operating against whole mailbox, clear unique list after processing every folder
             If ( $CleanupMode -eq 'Folder') {
-                Write-Verbose ('Cleaning unique list (finished folder)')
+                Write-Verbose ('Cleaning unique list (Finished Folder)')
                 $global:UniqueList= [System.Collections.ArrayList]@()
             }
 
@@ -1464,8 +1479,8 @@ begin {
         }
 
         # Not MultiMailbox (per mailbox), track MD5 hashes per mailbox
-        If ( $CleanupMode -ne 'MultiMailbox' ) {
-            Write-Verbose ('Cleaning unique list')
+        If ( $CleanupMode -eq 'Mailbox' ) {
+            Write-Verbose ('Cleaning unique list (Finished Mailbox)')
             $global:UniqueList= [System.Collections.ArrayList]@()
         }
         
@@ -1672,6 +1687,12 @@ Process {
                 }
                 Write-Verbose ('Processing {0} finished' -f $EmailAddress)
             }
+
+            If ( $CleanupMode -eq 'MailboxArchive') {
+                Write-Verbose ('Cleaning unique list (Finished Mailbox & Archive)')
+                $global:UniqueList= [System.Collections.ArrayList]@()
+            }
+
         }
     }
 }
