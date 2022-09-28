@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 2.22, June 13th, 2022
+    Version 2.23, September 28th, 2022
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -105,7 +105,8 @@
             Removed Exchange Server 2007 support
     2.21    Fixed progress bar text when processing Public Folders
     2.22    Added CleanUp option MailboxArchive
-            Refactoring to prevent FindItems throwing "property Hashtags is valid only for Exchange2015 or later" 
+            Refactoring to prevent FindItems throwing "property Hashtags is valid only for Exchange2015 or later"
+    2.23    Added Drafts to supported Well-Known Folders
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -197,7 +198,7 @@
     \*\FolderA          \TopFolderA\FolderA, \TopFolderB\FolderA
 
     For mailbox processing, you can also use well-known folders, by using this format: #WellKnownFolderName#, 
-    e.g. #Inbox#. Supported are #Calendar#, #Contacts#, #Inbox#, #Notes#, #SentItems#, #Tasks#, #JunkEmail# 
+    e.g. #Inbox#. Supported are #Calendar#, #Contacts#, #Inbox#, #Notes#, #SentItems#, #Tasks#, #JunkEmail#, #Drafts#
     and #DeletedItems#. The script uses the currently configured Well-Known Folder of the mailbox to be processed.
 
     .PARAMETER ExcludeFolders
@@ -905,7 +906,7 @@ begin {
             [string]$criteria= '',
             [string]$emailAddress
         )
-        $AllowedWKF= 'Inbox', 'Calendar', 'Contacts', 'Notes', 'SentItems', 'Tasks', 'JunkEmail', 'DeletedItems'
+        $AllowedWKF= 'Inbox', 'Calendar', 'Contacts', 'Notes', 'SentItems', 'Tasks', 'JunkEmail', 'DeletedItems', 'Drafts'
         # Construct regexp to see if allowed WKF is part of criteria string
         ForEach ( $ThisWKF in $AllowedWKF) {
             If ( $criteria -match '#{0}#') {
@@ -1156,8 +1157,10 @@ begin {
             $IncludeFilter,
             $ExcludeFilter,
             $PriorityFilter,
+            $Type,
             $EwsService
         )
+
         $FoldersToProcess= [System.Collections.ArrayList]@()
         $FolderView= New-Object Microsoft.Exchange.WebServices.Data.FolderView( $MaxFolderBatchSize)
         $FolderView.Traversal= [Microsoft.Exchange.WebServices.Data.FolderTraversal]::Shallow
@@ -1219,7 +1222,7 @@ begin {
                 }
                 If ( $Subs) {
                     # Could be that specific folder is to be excluded, but subfolders needs evaluation
-                    ForEach ( $AddFolder in (Get-SubFolders -Folder $FolderItem -CurrentPath $FolderPath -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService)) {
+                    ForEach ( $AddFolder in (Get-SubFolders -Folder $FolderItem -CurrentPath $FolderPath -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -Type $Type -EwsService $EwsService)) {
                         $FoldersToProcess.Add( $AddFolder) | Out-Null
                     }
                 }
@@ -1239,6 +1242,7 @@ begin {
             $PriorityFilter,
             $EwsService,
             $emailAddress,
+            $Type,
             $DeletedItemsFolder= $null
         )
 
@@ -1254,7 +1258,7 @@ begin {
 
         # Build list of folders to process
         Write-Verbose ('Collecting folders to process..')
-        $FoldersToProcess= Get-SubFolders -Folder $Folder -CurrentPath '' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService
+        $FoldersToProcess= Get-SubFolders -Folder $Folder -CurrentPath '' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -Type $Type -EwsService $EwsService
 
         $FoldersFound= $FoldersToProcess.Count
         Write-Verbose ('Found {0} folders that match search criteria' -f $FoldersFound)
@@ -1639,7 +1643,7 @@ Process {
                 $RootFolder= myEWSBind-WellKnownFolder $EwsService 'PublicFoldersRoot' 
                 If ($null -ne $RootFolder) {
                     Write-Verbose ('Processing Public Folders')
-                    If (! ( Process-Mailbox -Folder $RootFolder -Desc 'Public Folders' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService -emailAddress $emailAddress)) {
+                    If (! ( Process-Mailbox -Folder $RootFolder -Desc 'Public Folders' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService -Type $Type -emailAddress $emailAddress)) {
                         Write-Error ('Problem processing Public Folders as {0} ({1})' -f $EmailAddress, $CurrentIdentity)
                         Exit $ERR_PROCESSINGPUBLICFOLDERS
                     }
@@ -1658,7 +1662,7 @@ Process {
                     If ($null -ne $RootFolder) {
                         Write-Verbose ('Processing primary mailbox {0}' -f $EmailAddress)
                         $DeletedItemsFolder= myEWSBind-WellKnownFolder $EwsService 'DeletedItems' $emailAddress
-                        If (! ( Process-Mailbox -Folder $RootFolder -Desc 'Mailbox' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService -emailAddress $emailAddress -DeletedItemsFolder $DeletedItemsFolder)) {
+                        If (! ( Process-Mailbox -Folder $RootFolder -Desc 'Mailbox' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService -emailAddress $emailAddress -Type $Type -DeletedItemsFolder $DeletedItemsFolder)) {
                             Write-Error ('Problem processing primary mailbox of {0} ({1})' -f $EmailAddress, $CurrentIdentity)
                             Exit $ERR_PROCESSINGMAILBOX
                         }
@@ -1676,7 +1680,7 @@ Process {
                     If ($null -ne $ArchiveRootFolder) {
                         Write-Verbose ('Processing archive mailbox {0}' -f $EmailAddress)
                         $DeletedItemsFolder= myEWSBind-WellKnownFolder $EwsService 'ArchiveDeletedItems' $emailAddress
-                        If (! ( Process-Mailbox -Folder $ArchiveRootFolder -Desc 'Archive' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService -emailAddress $emailAddress -DeletedItemsFolder $DeletedItemsFolder)) {
+                        If (! ( Process-Mailbox -Folder $ArchiveRootFolder -Desc 'Archive' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService -emailAddress $emailAddress -Type $Type -DeletedItemsFolder $DeletedItemsFolder)) {
                             Write-Error ('Problem processing archive mailbox of {0} ({1})' -f $EmailAddress, $CurrentIdentity)
                             Exit $ERR_PROCESSINGARCHIVE
                         }
