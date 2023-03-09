@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 2.23, September 28th, 2022
+    Version 2.3, March 9th, 2023
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -107,6 +107,8 @@
     2.22    Added CleanUp option MailboxArchive
             Refactoring to prevent FindItems throwing "property Hashtags is valid only for Exchange2015 or later"
     2.23    Added Drafts to supported Well-Known Folders
+    2.3     Fixed duplicate detection for non-mail folders
+            Duplicate detection now uses SHA256 hash instead of MD5 checksum
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -773,7 +775,7 @@ begin {
             If( $Package) {
                 If( Get-Command -Name Get-Package -ErrorAction SilentlyContinue) {
                     If( Get-Package -Name $Package -ErrorAction SilentlyContinue) {
-                        $AbsoluteFileName= (Get-ChildItem -ErrorAction SilentlyContinue -Path (Split-Path -Parent (get-Package -Name $Package | Sort-Object -Property Version -Descending | Select-Object -First 1).Source) -Filter $FileName -Recurse).FullName
+                        $AbsoluteFileName= Join-Path -Path (get-Package -Name $Package | Sort-Object -Property Version -Descending | Select-Object -First 1).MetaData['InstalledLocation'] -ChildPath $FileName
                     }
                 }
             }
@@ -1127,9 +1129,9 @@ begin {
         param(
             [string]$string
         )
-        $md5= New-Object -TypeName System.Security.Cryptography.MD5CryptoServiceProvider
-        $data= ([system.Text.Encoding]::UTF8).GetBytes( $string)
-        return ([System.BitConverter]::ToString( $md5.ComputeHash( $data)) -replace ' - ', '')
+        $sha256 = [System.Security.Cryptography.HashAlgorithm]::Create('sha256')
+        $hash = $sha256.ComputeHash( [System.Text.Encoding]::UTF8.GetBytes( $string))
+        [System.BitConverter]::ToString( $hash).replace( '-', '')
     }
 
     Function Get-FolderPriority {
@@ -1286,8 +1288,7 @@ begin {
                 Else {
                     $ItemView.OrderBy.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::LastModifiedTime, [Microsoft.Exchange.WebServices.Data.SortDirection]::Descending)
                 }
-                $ItemView.PropertySet= New-Object Microsoft.Exchange.WebServices.Data.PropertySet( [Microsoft.Exchange.WebServices.Data.BasePropertySet]::IdOnly)
-                $ItemView.PropertySet.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::ItemClass)
+                $ItemView.PropertySet= New-Object Microsoft.Exchange.WebServices.Data.PropertySet( [Microsoft.Exchange.WebServices.Data.BasePropertySet]::FirstClassProperties)
                 $ItemView.PropertySet.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::DateTimeReceived)
                 $ItemView.PropertySet.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::Subject)
                 $ItemView.PropertySet.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::LastModifiedTime)
@@ -1324,74 +1325,70 @@ begin {
 
                             $TotalFolder++
                             $TotalMatch++
-                            if ($ThisMailboxMode -eq 'Body'){
+                            If( $ThisMailboxMode -eq 'Body') {
                                 # Use PR_MESSAGE_BODY for matching duplicates
-                                $key= $Item.Body
+                                $key= [System.Text.StringBuilder]::new( $Item.Body)
                             }
-                            if ($ThisMailboxMode -eq 'Quick') {
+                            If( $ThisMailboxMode -eq 'Quick') {
                                 # Use PidTagSearchKey for matching duplicates
                                 $PropVal= $null
                                 if ( $Item.TryGetProperty( $PidTagSearchKey, [ref]$PropVal)) {
-                                    $key= [System.BitConverter]::ToString($PropVal).Replace("-", "")
+                                    $key= [System.Text.StringBuilder]::new( [System.BitConverter]::ToString($PropVal)).Replace('-', '')
                                 }
                                 Else {
                                     Write-Debug 'Cannot access or missing PidTagSearchKey property, falling back to property mode (Full)'
                                     $ThisMailboxMode= 'Full'
                                 }
                             }
-                            If ( $ThisMailboxMode -eq 'Full') {
+                            If( $ThisMailboxMode -eq 'Full') {
                                 # Use predefined criteria for matching duplicates depending on ItemClass
-                                $key= $Item.ItemClass
+                                $key= [System.Text.StringBuilder]::new( $Item.ItemClass)
+                                if ($Item.Subject) { [void]$key.Append($Item.Subject)}
+                                If (!$NoSize) {if ($Item.Size) { [void]$key.Append( $Item.Size.ToString())}}
+
                                 switch ($Item.ItemClass) {
                                     'IPM.Note' {
-                                        if ($Item.DateTimeReceived) { $key += $Item.DateTimeReceived.ToString()}
-                                        if ($Item.Subject) { $key += $Item.Subject}
-                                        if ($Item.InternetMessageId) { $key += $Item.InternetMessageId}
-                                        if ($Item.DateTimeSent) { $key += $Item.DateTimeSent.ToString()}
-                                        if ($Item.Sender) { $key += $Item.Sender}
-                                        If (!$NoSize) {if ($Item.Size) { $key += $Item.Size.ToString()}}
+                                        if ($Item.DateTimeReceived) { [void]$key.Append( $Item.DateTimeReceived.ToString())}
+                                        if ($Item.InternetMessageId) { [void]$key.Append( $Item.InternetMessageId)}
+                                        if ($Item.DateTimeSent) { [void]$key.Append( $Item.DateTimeSent.ToString())}
+                                        if ($Item.Sender) { [void]$key.Append( $Item.Sender)}
                                     }
                                     'IPM.Appointment' {
-                                        if ($Item.Subject) { $key += $Item.Subject}
-                                        if ($Item.Location) { $key += $Item.Location}
-                                        if ($Item.Start) { $key += $Item.Start.ToString()}
-                                        if ($Item.End) { $key += $Item.End.ToString()}
-                                        If (!$NoSize) {if ($Item.Size) { $key += $Item.Size.ToString()}}
+                                        $Appointment = [Microsoft.Exchange.WebServices.Data.Appointment]::Bind( $EwsService, $Item.Id)
+                                        if ($Appointment.Location) { [void]$key.Append( $Appointment.Location)}
+                                        if ($Appointment.Start) { [void]$key.Append( $Appointment.Start.ToString())}
+                                        if ($Appointment.End) { [void]$key.Append( $Appointment.End.ToString())}
                                     }
                                     'IPM.Contact' {
-                                        if ($Item.FileAs) { $key += $Item.FileAs}
-                                        if ($Item.GivenName) { $key += $Item.GivenName}
-                                        if ($Item.Surname) { $key += $Item.Surname}
-                                        if ($Item.CompanyName) { $key += $Item.CompanyName}
-                                        if ($Item.PhoneNUmbers.TryGetValue('BusinessPhone', [ref]$temp)) { $key += $temp}
-                                        if ($Item.PhoneNUmbers.TryGetValue('HomePhone', [ref]$temp)) { $key += $temp}
-                                        if ($Item.PhoneNUmbers.TryGetValue('MobilePhone', [ref]$temp)) { $key += $temp}
-                                        If (!$NoSize) {if ($Item.Size) { $key += $Item.Size.ToString()}}
-                                    }
-                                    'IPM.DistList' {
-                                        if ($Item.FileAs) { $key += $Item.FileAs}
-                                        if ($Item.Members) { $key += $Item.Members.Count.ToString()}
+                                        $Contact = [Microsoft.Exchange.WebServices.Data.Contact]::Bind( $EwsService, $Item.Id)
+                                        if ($Contact.FileAs) { [void]$key.Append( $Contact.FileAs)}
+                                        if ($Contact.GivenName) { [void]$key.Append( $Contact.GivenName)}
+                                        if ($Contact.Surname) { [void]$key.Append( $Contact.Surname)}
+                                        if ($Contact.CompanyName) { [void]$key.Append( $Contact.CompanyName)}
+                                        if ($Contact.EmailAddresses[[Microsoft.Exchange.WebServices.Data.EmailAddressKey]::EmailAddress1]) { [void]$key.Append( $Contact.EmailAddresses[[Microsoft.Exchange.WebServices.Data.EmailAddressKey]::EmailAddress1])}
+                                        if ($Contact.PhoneNumbers[[Microsoft.Exchange.WebServices.Data.PhoneNumberKey]::BusinessPhone]) { [void]$key.Append( $Contact.PhoneNumbers[[Microsoft.Exchange.WebServices.Data.PhoneNumberKey]::BusinessPhone])}
+                                        if ($Contact.PhoneNumbers[[Microsoft.Exchange.WebServices.Data.PhoneNumberKey]::MobilePhone]) { [void]$key.Append( $Contact.PhoneNumbers[[Microsoft.Exchange.WebServices.Data.PhoneNumberKey]::MobilePhone])}
+                                        if ($Contact.PhoneNumbers[[Microsoft.Exchange.WebServices.Data.PhoneNumberKey]::HomePhone]) { [void]$key.Append( $Contact.PhoneNumbers[[Microsoft.Exchange.WebServices.Data.PhoneNumberKey]::HomePhone])}
                                     }
                                     'IPM.Task' {
-                                        if ($Item.Subject) { $key += $Item.Subject}
-                                        if ($Item.StartDate) { $key += $Item.StartDate.ToString()}
-                                        if ($Item.DueDate) { $key += $Item.DueDate.ToString()}
-                                        if ($Item.Status) { $key += $Item.Status}
-                                        If (!$NoSize) {if ($Item.Size) { $key += $Item.Size.ToString()}}
+                                        $Task= [Microsoft.Exchange.WebServices.Data.Task]::Bind( $EwsService, $Item.Id)
+                                        if ($Task.Subject) { [void]$key.Append( $Task.Subject)}
+                                        if ($Task.StartDate) {[void]$key.Append( $Task.StartDate.ToString())}
+                                        if ($Task.DueDate) { [void]$key.Append( $Task.DueDate.ToString())}
+                                        if ($Task.Status) { [void]$key.Append( $Task.Status)}
                                     }
                                     'IPM.Post' {
-                                        if ($Item.Subject) { $key += $Item.Subject}
-                                        If (!$NoSize) {if ($Item.Size) { $key += $Item.Size.ToString()}}
+                                        if ($Item.Subject) { [void]$key.Append( $Item.Subject)}
                                     }
                                     Default {
-                                        if ($Item.DateTimeReceived) { $key += $Item.DateTimeReceived.ToString()}
-                                        if ($Item.Subject) { $key += $Item.Subject}
-                                        If (!$NoSize) {if ($Item.Size) { $key += $Item.Size.ToString()}}
+                                        if ($Item.DateTimeReceived) { [void]$key.Append( $Item.DateTimeReceived.ToString())}
+                                        if ($Item.Subject) { [void]$key.Append( $Item.Subject) }
                                     }
                                 }
                             }
-                            If ( $null -ne $key) {
-                                $hash= Get-Hash $key
+
+                            If ($key.length -gt 0) {
+                                $hash= Get-Hash $key.ToString()
                                 If ( $global:UniqueList.contains( $hash)) {
                                     If ( $Report.IsPresent) {
                                         Write-Host ('Item: {0} of {1} ({2})' -f $Item.Subject, $Item.DateTimeReceived, $Item.ItemClass)
