@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 2.3, March 9th, 2023
+    Version 2.4, April 18th, 2023
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -109,6 +109,12 @@
     2.23    Added Drafts to supported Well-Known Folders
     2.3     Fixed duplicate detection for non-mail folders
             Duplicate detection now uses SHA256 hash instead of MD5 checksum
+    2.4     Added ExchangeSchema parameter
+            Added NoSCP switch
+            Increased type binding for some parameters
+            Removed unused myEWSFind-Items function
+            Reduced FindItems returnset to required properties
+            Setting TimeZone when connecting, possibly resolves 'Object reference not set to an instance of an object'            
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -117,6 +123,17 @@
     Exchange Client Access Server to use for Exchange Web Services. When ommited,
     script will attempt to use Autodiscover.
 
+    .PARAMETER NoSCP
+    Will instruct to skip SCP lookups in Active Directory when using Autodiscover.
+
+    .PARAMETER ExchangeSchema 
+    Specify Exchange schema to use when connecting to Exchange server or Exchange Online.
+    Options are Exchange2007_SP1, Exchange2010, Exchange2010_SP1, Exchange2010_SP2, Exchange2013, Exchange2013_SP1, 
+    Exchange2015 or Exchange2016. Default is Exchange2013_SP1, except when you specified the server
+    parameter as 'outlook.office365.com', in which case it will be set to Exchange2015 for compatibility purposes.
+    If you do not specify server, and you get "The property Hashtags is valid only for Exchange Exchange2015 or later versions",
+    you can specify Exchange2015 as ExchangeSchema.
+    
     .PARAMETER Impersonation
     When specified, uses impersonation when accessing the mailbox, otherwise account specified with Credentials is
     used. When using OAuth authentication with a registered app, you don't need to specify Impersonation.
@@ -394,7 +411,50 @@ param(
     [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
     [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
     [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [ValidateSet( 'Exchange2007_SP1', 'Exchange2010', 'Exchange2010_SP1', 'Exchange2010_SP2', 'Exchange2013', 'Exchange2013_SP1', 'Exchange2015', 'Exchange2016' )]
+    [string]$ExchangeSchema='Exchange2013_SP1',
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
     [string]$Server,
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [switch]$NoSCP,
     [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
     [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
     [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
@@ -726,8 +786,6 @@ param(
     [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
     [switch]$TrustAll
 )
-#Requires -Version 3.0
-
 begin {
 
     # Process folders these batches
@@ -912,7 +970,7 @@ begin {
         # Construct regexp to see if allowed WKF is part of criteria string
         ForEach ( $ThisWKF in $AllowedWKF) {
             If ( $criteria -match '#{0}#') {
-                $criteria= $criteria -replace ('#{0}#' -f $ThisWKF), (myEWSBind-WellKnownFolder $EwsService $ThisWKF $emailAddress).DisplayName
+                $criteria= $criteria -replace ('#{0}#' -f $ThisWKF), (myEWSBind-WellKnownFolder -EwsService $EwsService -WellKnownFolderName $ThisWKF -EmailAddress $emailAddress).DisplayName
             }
         }
         return $criteria
@@ -940,7 +998,7 @@ begin {
     Function myEWSFind-Folders {
         param(
             [Microsoft.Exchange.WebServices.Data.ExchangeService]$EwsService,
-            [Microsoft.Exchange.WebServices.Data.FolderId]$FolderId,
+            [Microsoft.Exchange.WebServices.Data.Folder]$Folder,
             [Microsoft.Exchange.WebServices.Data.SearchFilter+SearchFilterCollection]$FolderSearchCollection,
             [Microsoft.Exchange.WebServices.Data.FolderView]$FolderView
         )
@@ -948,7 +1006,7 @@ begin {
         $CritErr= $false
         Do {
             Try {
-                $res= $EwsService.FindFolders( $FolderId, $FolderSearchCollection, $FolderView)
+                $res= $EwsService.FindFolders( $Folder.Id, $FolderSearchCollection, $FolderView)
                 $OpSuccess= $true
             }
             catch [Microsoft.Exchange.WebServices.Data.ServerBusyException] {
@@ -958,26 +1016,27 @@ begin {
             catch {
                 $OpSuccess= $false
                 $critErr= $true
-                Write-Warning ('Error performing operation FindFolders with Search options in {0}. Error: {1}' -f $FolderId.FolderName, $Error[0])
+                Write-Warning ('Error performing operation FindFolders with Search options in {0}. Error: {1}' -f $Folder.Id.FolderName, $Error[0])
             }
             finally {
                 If ( !$critErr) { Tune-SleepTimer $OpSuccess }
             }
         } while ( !$OpSuccess -and !$critErr)
-        Write-Output -NoEnumerate $res
+       $res
     }
 
     Function myEWSFind-FoldersNoSearch {
         param(
             [Microsoft.Exchange.WebServices.Data.ExchangeService]$EwsService,
-            [Microsoft.Exchange.WebServices.Data.FolderId]$FolderId,
+            [Microsoft.Exchange.WebServices.Data.Folder]$Folder,
             [Microsoft.Exchange.WebServices.Data.FolderView]$FolderView
         )
         $OpSuccess= $false
         $CritErr= $false
         Do {
             Try {
-                $res= $EwsService.FindFolders( $FolderId, $FolderView)
+                $res= $EwsService.FindFolders( $Folder.Id, $FolderView)
+                $res.load()
                 $OpSuccess= $true
             }
             catch [Microsoft.Exchange.WebServices.Data.ServerBusyException] {
@@ -987,45 +1046,16 @@ begin {
             catch {
                 $OpSuccess= $false
                 $critErr= $true
-                Write-Warning ('Error performing operation FindFolders without Search options in {0}. Error: {1}' -f $FolderId.FolderName, $Error[0])
+                Write-Warning ('Error performing operation FindFolders without Search options in {0}. Error: {1}' -f $Folder.Id.FolderName, $Error[0])
             }
             finally {
                 If ( !$critErr) { Tune-SleepTimer $OpSuccess }
             }
         } while ( !$OpSuccess -and !$critErr)
-        Write-Output -NoEnumerate $res
+       $res
     }
 
     Function myEWSFind-Items {
-        param(
-            [Microsoft.Exchange.WebServices.Data.Folder]$Folder,
-            [Microsoft.Exchange.WebServices.Data.SearchFilter+SearchFilterCollection]$ItemSearchFilterCollection,
-            [Microsoft.Exchange.WebServices.Data.ItemView]$ItemView
-        )
-        $OpSuccess= $false
-        $CritErr= $false
-        Do {
-            Try {
-                $res= $Folder.FindItems( $ItemSearchFilterCollection, $ItemView)
-                $OpSuccess= $true
-            }
-            catch [Microsoft.Exchange.WebServices.Data.ServerBusyException] {
-                $OpSuccess= $false
-                Write-Warning 'EWS operation failed, server busy - will retry later'
-            }
-            catch {
-                $OpSuccess= $false
-                $critErr= $true
-                Write-Warning ('Error performing operation FindItems with Search options in {0}. Error: {1}' -f $Folder.DisplayName, $Error[0])
-            }
-            finally {
-                If ( !$critErr) { Tune-SleepTimer $OpSuccess }
-            }
-        } while ( !$OpSuccess -and !$critErr)
-        Write-Output -NoEnumerate $res
-    }
-
-    Function myEWSFind-ItemsNoSearch {
         param(
             [Microsoft.Exchange.WebServices.Data.Folder]$Folder,
             [Microsoft.Exchange.WebServices.Data.ItemView]$ItemView
@@ -1044,12 +1074,13 @@ begin {
             catch {
                 $OpSuccess= $false
                 $critErr= $true
-                Write-Warning ('Error performing operation FindItems without Search options in {0}. Error {1}' -f $Folder.DisplayName, $Error[0])
+                Write-Warning ('Error performing operation FindItems without Search options in {0}. Error: {1}' -f $Folder.DisplayName, $Error[0])
             }
             finally {
                 If ( !$critErr) { Tune-SleepTimer $OpSuccess }
             }
         } while ( !$OpSuccess -and !$critErr)
+
         Write-Output -NoEnumerate $res
     }
 
@@ -1066,7 +1097,8 @@ begin {
         $critErr= $false
         Do {
             Try {
-                If ( @([Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2013, [Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2013_SP1) -contains $EwsService.RequestedServerVersion) {
+                # Only supported by Exchange 2013 and up
+                If ( 15 -le $EwsService.ServerInfo.MajorVersion) {
                     $res= $EwsService.DeleteItems( $ItemIds, $DeleteMode, $SendCancellationsMode, $AffectedTaskOccurrences, $SuppressReadReceipt)
                 }
                 Else {
@@ -1087,27 +1119,28 @@ begin {
                 If ( !$critErr) { Tune-SleepTimer $OpSuccess }
             }
         } while ( !$OpSuccess -and !$critErr)
-        Write-Output -NoEnumerate $res
+        $res
     }
 
     Function myEWSBind-WellKnownFolder {
         param(
             [Microsoft.Exchange.WebServices.Data.ExchangeService]$EwsService,
             [string]$WellKnownFolderName,
-            [string]$emailAddress
+            [string]$emailAddress,
+            [switch]$ShowVersion
         )
         $OpSuccess= $false
         $critErr= $false
         Do {
             Try {
-                If( $emailAddress) {
-                    $explicitFolder= New-Object -TypeName Microsoft.Exchange.WebServices.Data.FolderId( [Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::$WellKnownFolderName, $emailAddress)  
-                }
-                Else {
-                    $explicitFolder= New-Object -TypeName Microsoft.Exchange.WebServices.Data.FolderId( [Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::$WellKnownFolderName)  
-                }
+                $explicitFolder= New-Object -TypeName Microsoft.Exchange.WebServices.Data.FolderId( [Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::$WellKnownFolderName, $emailAddress)  
                 $res= [Microsoft.Exchange.WebServices.Data.Folder]::Bind( $EwsService, $explicitFolder)
+                $res.load()
                 $OpSuccess= $true
+                if( $ShowVersion) {
+                    # Show Exchange build when connecting to a primary/archive/pf mailbox
+                    Write-Verbose ('Detected Exchange Server version {0}.{1}.{2}.{3} ({4}, requested schema {5})' -f $EwsService.ServerInfo.MajorVersion, $EwsService.ServerInfo.MinorVersion, $EwsService.ServerInfo.MajorBuildNumber, $EwsService.ServerInfo.MinorBuildNumber, $EwsService.ServerInfo.VersionString, $ExchangeSchema)
+                }
             }
             catch [Microsoft.Exchange.WebServices.Data.ServerBusyException] {
                 $OpSuccess= $false
@@ -1116,13 +1149,14 @@ begin {
             catch {
                 $OpSuccess= $false
                 $critErr= $true
-                Write-Warning ('Cannot bind to {0}: {1}' -f $WellKnownFolderName, $_.Exception.Message)
+                Write-Warning ('Cannot bind to {0}: {1}' -f $WellKnownFolderName, $Error[0])
             }
             finally {
                 If ( !$critErr) { Tune-SleepTimer $OpSuccess }
             }
         } while ( !$OpSuccess -and !$critErr)
-        Write-Output -NoEnumerate $res
+
+        $res
     }
 
     Function Get-Hash {
@@ -1154,21 +1188,20 @@ begin {
 
     Function Get-SubFolders {
         param(
-            $Folder,
+            [Microsoft.Exchange.WebServices.Data.ExchangeService]$EwsService,
+            [Microsoft.Exchange.WebServices.Data.Folder]$Folder,
             $CurrentPath,
             $IncludeFilter,
             $ExcludeFilter,
             $PriorityFilter,
-            $Type,
-            $EwsService
+            $Type
         )
 
         $FoldersToProcess= [System.Collections.ArrayList]@()
         $FolderView= New-Object Microsoft.Exchange.WebServices.Data.FolderView( $MaxFolderBatchSize)
         $FolderView.Traversal= [Microsoft.Exchange.WebServices.Data.FolderTraversal]::Shallow
-        $FolderView.PropertySet= New-Object Microsoft.Exchange.WebServices.Data.PropertySet([Microsoft.Exchange.WebServices.Data.BasePropertySet]::IdOnly)
-        $FolderView.PropertySet.Add( [Microsoft.Exchange.WebServices.Data.FolderSchema]::DisplayName)
-        $FolderView.PropertySet.Add( [Microsoft.Exchange.WebServices.Data.FolderSchema]::FolderClass)
+        $folderPropset= @( [Microsoft.Exchange.WebServices.Data.FolderSchema]::DisplayName, [Microsoft.Exchange.WebServices.Data.FolderSchema]::FolderClass )
+        $FolderView.PropertySet= new-object Microsoft.Exchange.WebServices.Data.PropertySet([Microsoft.Exchange.WebServices.Data.BasePropertySet]::FirstClassProperties, $folderPropSet)  
         $FolderSearchCollection= New-Object Microsoft.Exchange.WebServices.Data.SearchFilter+SearchFilterCollection( [Microsoft.Exchange.WebServices.Data.LogicalOperator]::And)
         If ( $Type -ne 'All') {
             $FolderSearchClass= (@{Mail= 'IPF.Note'; Calendar= 'IPF.Appointment'; Contacts= 'IPF.Contact'; Tasks= 'IPF.Task'; Notes= 'IPF.StickyNotes'})[$Type]
@@ -1177,12 +1210,14 @@ begin {
         }
         Do {
             If ( $FolderSearchCollection.Count -ge 1) {
-                $FolderSearchResults= myEWSFind-Folders $EwsService $Folder.Id $FolderSearchCollection $FolderView
+                $FolderSearchResults= myEWSFind-Folders -EwsService $EwsService -Folder $Folder -FolderSearchCollection $FolderSearchCollection -FolderView $FolderView
             }
             Else {
-                $FolderSearchResults= myEWSFind-FoldersNoSearch $EwsService $Folder.Id $FolderView
+                $FolderSearchResults= myEWSFind-FoldersNoSearch -EwsService $EwsService -Folder $Folder -FolderView $FolderView
             }
+            
             ForEach ( $FolderItem in $FolderSearchResults) {
+
                 $FolderPath= '{0}\{1}' -f $CurrentPath, $FolderItem.DisplayName
                 If ( $IncludeFilter) {
                     $Add= $false
@@ -1237,20 +1272,19 @@ begin {
     Function Process-Mailbox {
         [CmdletBinding(SupportsShouldProcess=$true)]
         param(
-            $Folder,
+            [Microsoft.Exchange.WebServices.Data.ExchangeService]$EwsService,
+            [Microsoft.Exchange.WebServices.Data.Folder]$Folder,
             $Desc,
             $IncludeFilter,
             $ExcludeFilter,
             $PriorityFilter,
-            $EwsService,
             $emailAddress,
             $Type,
-            $DeletedItemsFolder= $null
+            [Microsoft.Exchange.WebServices.Data.Folder]$DeletedItemsFolder
         )
 
         $ProcessingOK= $True
         $ThisMailboxMode= $Mode
-        $temp= $null
         $TotalMatch= 0
         $TotalRemoved= 0
         $FoldersFound= 0
@@ -1288,15 +1322,20 @@ begin {
                 Else {
                     $ItemView.OrderBy.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::LastModifiedTime, [Microsoft.Exchange.WebServices.Data.SortDirection]::Descending)
                 }
-                $ItemView.PropertySet= New-Object Microsoft.Exchange.WebServices.Data.PropertySet( [Microsoft.Exchange.WebServices.Data.BasePropertySet]::FirstClassProperties)
-                $ItemView.PropertySet.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::DateTimeReceived)
-                $ItemView.PropertySet.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::Subject)
-                $ItemView.PropertySet.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::LastModifiedTime)
-                If( $ThisMailboxMode -eq 'Body') {
-                    # Only retrieve Body when we use it to determine 'uniqueness'
-                    [Microsoft.Exchange.WebServices.Data.ItemSchema]::Body
+                $ItemPropset= [System.Collections.ArrayList]@(
+                     [Microsoft.Exchange.WebServices.Data.ItemSchema]::DateTimeReceived,
+                     [Microsoft.Exchange.WebServices.Data.ItemSchema]::LastModifiedTime,
+                     [Microsoft.Exchange.WebServices.Data.ItemSchema]::Subject
+                )
+                # Only retrieve these attributes when we when in relevant operating mode:
+                If(! $NoSize) {
+                    $ItemPropset.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::Size)
                 }
-                $ItemView.PropertySet.Add( $PidTagSearchKey)
+                If( $ThisMailboxMode -eq 'Body') {
+                    $ItemPropset.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::Body)
+                }
+                $ItemPropset.Add( $PidTagSearchKey)
+                $ItemView.PropertySet= New-Object Microsoft.Exchange.WebServices.Data.PropertySet( [Microsoft.Exchange.WebServices.Data.BasePropertySet]::FirstClassProperties, $ItemPropSet)
 
                 $DuplicateList= [System.Collections.ArrayList]@()
                 $TotalDuplicates= 0
@@ -1306,9 +1345,13 @@ begin {
                 $ItemIds= [Activator]::CreateInstance($type)
 
                 Do {
+
                     $SendCancellationsMode= $null
                     $AffectedTaskOccurrences= [Microsoft.Exchange.WebServices.Data.AffectedTaskOccurrence]::AllOccurrences
-                    $ItemSearchResults= MyEWSFind-ItemsNoSearch $SubFolder.Folder $ItemView
+
+                    # Process our custom struct with Priority, Folder and Name
+                    $ItemSearchResults= MyEWSFind-Items -Folder $SubFolder.Folder -ItemView $ItemView
+
                     Write-Debug ('Checking {0} items in {1}' -f $ItemSearchResults.Items.Count, $SubFolder.Name)
                     If (!$NoProgressBar) {
                         Write-Progress -Id 2 -Activity ('Processing folder {0}' -f $SubFolder.Name) -Status ('Finding duplicate items: Checked {0}, found {1}' -f $TotalFolder, $TotalDuplicates)
@@ -1321,8 +1364,8 @@ begin {
                         }
 
                         ForEach ( $Item in $ItemSearchResults.Items) {
-                            Write-Debug ('Inspecting item {0} of {1}, modified {2}' -f $Item.Subject, $Item.DateTimeReceived, $Item.LastModifiedTime)
 
+                            Write-Debug ('Inspecting item {0} of {1}, modified {2}' -f $Item.Subject, $Item.DateTimeReceived, $Item.LastModifiedTime)
                             $TotalFolder++
                             $TotalMatch++
                             If( $ThisMailboxMode -eq 'Body') {
@@ -1348,6 +1391,8 @@ begin {
 
                                 switch ($Item.ItemClass) {
                                     'IPM.Note' {
+                                        $Mail= [Microsoft.Exchange.WebServices.Data.EmailMessage]::Bind( $EwsService, $Item.Id)
+                                        $Mail.load()
                                         if ($Item.DateTimeReceived) { [void]$key.Append( $Item.DateTimeReceived.ToString())}
                                         if ($Item.InternetMessageId) { [void]$key.Append( $Item.InternetMessageId)}
                                         if ($Item.DateTimeSent) { [void]$key.Append( $Item.DateTimeSent.ToString())}
@@ -1355,12 +1400,14 @@ begin {
                                     }
                                     'IPM.Appointment' {
                                         $Appointment = [Microsoft.Exchange.WebServices.Data.Appointment]::Bind( $EwsService, $Item.Id)
+                                        $Appointment.load()
                                         if ($Appointment.Location) { [void]$key.Append( $Appointment.Location)}
                                         if ($Appointment.Start) { [void]$key.Append( $Appointment.Start.ToString())}
                                         if ($Appointment.End) { [void]$key.Append( $Appointment.End.ToString())}
                                     }
                                     'IPM.Contact' {
                                         $Contact = [Microsoft.Exchange.WebServices.Data.Contact]::Bind( $EwsService, $Item.Id)
+                                        $Contact.load()
                                         if ($Contact.FileAs) { [void]$key.Append( $Contact.FileAs)}
                                         if ($Contact.GivenName) { [void]$key.Append( $Contact.GivenName)}
                                         if ($Contact.Surname) { [void]$key.Append( $Contact.Surname)}
@@ -1372,17 +1419,20 @@ begin {
                                     }
                                     'IPM.Task' {
                                         $Task= [Microsoft.Exchange.WebServices.Data.Task]::Bind( $EwsService, $Item.Id)
+                                        $Task.load()
                                         if ($Task.Subject) { [void]$key.Append( $Task.Subject)}
                                         if ($Task.StartDate) {[void]$key.Append( $Task.StartDate.ToString())}
                                         if ($Task.DueDate) { [void]$key.Append( $Task.DueDate.ToString())}
                                         if ($Task.Status) { [void]$key.Append( $Task.Status)}
                                     }
                                     'IPM.Post' {
-                                        if ($Item.Subject) { [void]$key.Append( $Item.Subject)}
+                                        $ItemFull= [Microsoft.Exchange.WebServices.Data.Item]::Bind( $EwsService, $Item.Id)
+                                        if ($ItemFull.Subject) { [void]$key.Append( $ItemFull.Subject)}
                                     }
                                     Default {
-                                        if ($Item.DateTimeReceived) { [void]$key.Append( $Item.DateTimeReceived.ToString())}
-                                        if ($Item.Subject) { [void]$key.Append( $Item.Subject) }
+                                        $ItemFull= [Microsoft.Exchange.WebServices.Data.Item]::Bind( $EwsService, $Item.Id)
+                                        if ($Item.DateTimeReceived) { [void]$key.Append( $ItemFull.DateTimeReceived.ToString())}
+                                        if ($ItemFull.Subject) { [void]$key.Append( $ItemFull.Subject) }
                                     }
                                 }
                             }
@@ -1496,13 +1546,13 @@ begin {
     Import-ModuleDLL -Name 'Microsoft.Exchange.WebServices' -FileName 'Microsoft.Exchange.WebServices.dll' -Package 'Exchange.WebServices.Managed.Api'
     Import-ModuleDLL -Name 'Microsoft.Identity.Client' -FileName 'Microsoft.Identity.Client.dll' -Package 'Microsoft.Identity.Client'
 
-    If ( $MailboxOnly) {
-        $ExchangeVersion= [Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2010_SP1
+    $TZ= [System.TimeZoneInfo]::Local
+    Try {
+        $EwsService= [Microsoft.Exchange.WebServices.Data.ExchangeService]::new( [Microsoft.Exchange.WebServices.Data.ExchangeVersion]::$ExchangeSchema, [System.TimeZoneInfo]::FindSystemTimeZoneById( $TZ.Id))
     }
-    Else {
-        $ExchangeVersion= [Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2013_SP1
+    Catch {
+        Throw( 'Problem initializing Exchange Web Services using schema {0} and TimeZone {1}' -f $ExchangeSchema, $TZ.Id)
     }
-    $EwsService= [Microsoft.Exchange.WebServices.Data.ExchangeService]::new( $ExchangeVersion)
 
     If( $Credentials -or $UseDefaultCredentials) {
         If( $Credentials) {
@@ -1577,14 +1627,13 @@ begin {
             Exit $ERR_INVALIDCREDENTIALS
         }
     }
-
+    $EwsService.EnableScpLookup= if( $NoSCP) { $false } else { $true }
     Write-Verbose ('Cleanup Mode: {0}' -f $CleanupMode)
 
     If( $TrustAll) {
         Set-SSLVerification -Disable
     }
 }
-
 Process {
 
     ForEach ( $CurrentIdentity in $Identity) {
@@ -1637,7 +1686,7 @@ Process {
 
         If ( $PublicFolders.IsPresent) {
             try {
-                $RootFolder= myEWSBind-WellKnownFolder $EwsService 'PublicFoldersRoot' 
+                $RootFolder= myEWSBind-WellKnownFolder -EwsService $EwsService -WellKnownFolderName 'PublicFoldersRoot' 
                 If ($null -ne $RootFolder) {
                     Write-Verbose ('Processing Public Folders')
                     If (! ( Process-Mailbox -Folder $RootFolder -Desc 'Public Folders' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService -Type $Type -emailAddress $emailAddress)) {
@@ -1655,10 +1704,11 @@ Process {
         Else {
             If ( -not $ArchiveOnly.IsPresent) {
                 try {
-                    $RootFolder= myEWSBind-WellKnownFolder $EwsService 'MsgFolderRoot' $EmailAddress
+                    $RootFolder= myEWSBind-WellKnownFolder -EwsService $EwsService -WellKnownFolderName 'MsgFolderRoot' -EmailAddress $EmailAddress -ShowVersion
                     If ($null -ne $RootFolder) {
                         Write-Verbose ('Processing primary mailbox {0}' -f $EmailAddress)
-                        $DeletedItemsFolder= myEWSBind-WellKnownFolder $EwsService 'DeletedItems' $emailAddress
+                        $DeletedItemsFolder= myEWSBind-WellKnownFolder -EwsService $EwsService -WellKnownFolderName 'DeletedItems' -EmailAddress $emailAddress
+
                         If (! ( Process-Mailbox -Folder $RootFolder -Desc 'Mailbox' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService -emailAddress $emailAddress -Type $Type -DeletedItemsFolder $DeletedItemsFolder)) {
                             Write-Error ('Problem processing primary mailbox of {0} ({1})' -f $EmailAddress, $CurrentIdentity)
                             Exit $ERR_PROCESSINGMAILBOX
@@ -1673,10 +1723,10 @@ Process {
 
             If ( -not $MailboxOnly.IsPresent) {
                 try {
-                    $ArchiveRootFolder= myEWSBind-WellKnownFolder $EwsService 'ArchiveMsgFolderRoot' $EmailAddress
+                    $ArchiveRootFolder= myEWSBind-WellKnownFolder -EwsService $EwsService -WellKnownFolderName 'ArchiveMsgFolderRoot' -EmailAddress $EmailAddress -ShowVersion
                     If ($null -ne $ArchiveRootFolder) {
                         Write-Verbose ('Processing archive mailbox {0}' -f $EmailAddress)
-                        $DeletedItemsFolder= myEWSBind-WellKnownFolder $EwsService 'ArchiveDeletedItems' $emailAddress
+                        $DeletedItemsFolder= myEWSBind-WellKnownFolder -EwsService $EwsService -WellKnownFolderName 'ArchiveDeletedItems' -EmailAddress $emailAddress
                         If (! ( Process-Mailbox -Folder $ArchiveRootFolder -Desc 'Archive' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService -emailAddress $emailAddress -Type $Type -DeletedItemsFolder $DeletedItemsFolder)) {
                             Write-Error ('Problem processing archive mailbox of {0} ({1})' -f $EmailAddress, $CurrentIdentity)
                             Exit $ERR_PROCESSINGARCHIVE
