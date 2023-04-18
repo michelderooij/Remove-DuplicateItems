@@ -129,10 +129,10 @@
     .PARAMETER ExchangeSchema 
     Specify Exchange schema to use when connecting to Exchange server or Exchange Online.
     Options are Exchange2007_SP1, Exchange2010, Exchange2010_SP1, Exchange2010_SP2, Exchange2013, Exchange2013_SP1, 
-    Exchange2015 or Exchange2016. Default is Exchange2013_SP1, except when you specified the server
-    parameter as 'outlook.office365.com', in which case it will be set to Exchange2015 for compatibility purposes.
+    Exchange2015 or Exchange2016. Default is Exchange2013_SP1, except when you specified the server parameter as 
+    'outlook.office365.com', in which case it will be set to Exchange2016 for Exchange Online compatibility reasons.
     If you do not specify server, and you get "The property Hashtags is valid only for Exchange Exchange2015 or later versions",
-    you can specify Exchange2015 as ExchangeSchema.
+    you can specify Exchange2015 (or Exchange 2016) as ExchangeSchema.
     
     .PARAMETER Impersonation
     When specified, uses impersonation when accessing the mailbox, otherwise account specified with Credentials is
@@ -1547,6 +1547,11 @@ begin {
     Import-ModuleDLL -Name 'Microsoft.Identity.Client' -FileName 'Microsoft.Identity.Client.dll' -Package 'Microsoft.Identity.Client'
 
     $TZ= [System.TimeZoneInfo]::Local
+    # Override ExchangeSchema when connecting to EXO
+    If( $Server -eq 'outlook.office365.com') {
+        $ExchangeSchema= 'Exchange2016'
+    } 
+ 
     Try {
         $EwsService= [Microsoft.Exchange.WebServices.Data.ExchangeService]::new( [Microsoft.Exchange.WebServices.Data.ExchangeVersion]::$ExchangeSchema, [System.TimeZoneInfo]::FindSystemTimeZoneById( $TZ.Id))
     }
