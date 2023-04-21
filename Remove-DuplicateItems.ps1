@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 2.42, April 21st, 2023
+    Version 2.43, April 21st, 2023
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -118,7 +118,8 @@
     2.41    Further optimized item retrieval, should see significant performance improvements (300%-400%, but YMMV) 
     2.42    Removed unneeded call to fetch Item properties
             Changed Appointment fetching removing obsolete bind/load with performance penalty
-            Changed Contact property set to compare so we can use FindItem 
+            Changed Contact property set to compare so we can use FindItem
+    2.43    Fixed typo causing error forn mon-standard items
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -1442,7 +1443,7 @@ begin {
                                         if ($Item.DateTimeReceived) { [void]$keyElem.Add( $Item.DateTimeReceived.ToString())}
                                     }
                                     Default {
-                                        if ($Item.DateTimeReceived) { [void]$keyElem.Add( $ItemFull.DateTimeReceived.ToString())}
+                                        if ($Item.DateTimeReceived) { [void]$keyElem.Add( $Item.DateTimeReceived.ToString())}
                                     }
                                 }
                             }
