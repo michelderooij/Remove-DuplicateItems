@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 2.41, April 18th, 2023
+    Version 2.42, April 21st, 2023
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -116,6 +116,9 @@
             Reduced FindItems returnset to required properties
             Setting TimeZone when connecting, possibly resolves 'Object reference not set to an instance of an object'  
     2.41    Further optimized item retrieval, should see significant performance improvements (300%-400%, but YMMV) 
+    2.42    Removed unneeded call to fetch Item properties
+            Changed Appointment fetching removing obsolete bind/load with performance penalty
+            Changed Contact property set to compare so we can use FindItem 
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -164,12 +167,12 @@
               attribute; This is the default mode.
     - Full:   Removes duplicate items with predefined matching criteria,
               depending on item class:
-              - Contacts: File As, First Name, Last Name, Company Name,
-                Business Phone, Mobile Phone, Home Phone, Size
+              - Contacts: File As, GivenName, SurName, Company Name,
+                Display Name, Initials, Job Title, Size
               - Distribution List: FileAs, Number of Members, Size
               - Calendar: Subject, Location, Start & End Date, Size
               - Task: Subject, Start Date, Due Date, Status, Size
-              - Note: Contents, Color, Size
+              - Note: Subject, DateTimeReceived, Size
               - Mail: Subject, Internet Message ID, DateTimeSent,
                 DateTimeReceived, Sender, Size
               - Other: Subject, DateTimeReceived, Size
@@ -1003,6 +1006,7 @@ begin {
             [Microsoft.Exchange.WebServices.Data.SearchFilter+SearchFilterCollection]$FolderSearchCollection,
             [Microsoft.Exchange.WebServices.Data.FolderView]$FolderView
         )
+
         $OpSuccess= $false
         $CritErr= $false
         Do {
@@ -1017,7 +1021,7 @@ begin {
             catch {
                 $OpSuccess= $false
                 $critErr= $true
-                Write-Warning ('Error performing operation FindFolders with Search options in {0}. Error: {1}' -f $Folder.Id.FolderName, $Error[0])
+                Write-Warning ('Error performing operation FindFolders with Search options in {0}. Error: {1}' -f $Folder.FolderName, $Error[0])
             }
             finally {
                 If ( !$critErr) { Tune-SleepTimer $OpSuccess }
@@ -1037,7 +1041,6 @@ begin {
         Do {
             Try {
                 $res= $EwsService.FindFolders( $Folder.Id, $FolderView)
-                $res.load()
                 $OpSuccess= $true
             }
             catch [Microsoft.Exchange.WebServices.Data.ServerBusyException] {
@@ -1047,7 +1050,7 @@ begin {
             catch {
                 $OpSuccess= $false
                 $critErr= $true
-                Write-Warning ('Error performing operation FindFolders without Search options in {0}. Error: {1}' -f $Folder.Id.FolderName, $Error[0])
+                Write-Warning ('Error performing operation FindFolders without Search options in {0}. Error: {1}' -f $Folder.FolderName, $Error[0])
             }
             finally {
                 If ( !$critErr) { Tune-SleepTimer $OpSuccess }
@@ -1136,7 +1139,6 @@ begin {
             Try {
                 $explicitFolder= New-Object -TypeName Microsoft.Exchange.WebServices.Data.FolderId( [Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::$WellKnownFolderName, $emailAddress)  
                 $res= [Microsoft.Exchange.WebServices.Data.Folder]::Bind( $EwsService, $explicitFolder)
-                $res.load()
                 $OpSuccess= $true
                 if( $ShowVersion) {
                     # Show Exchange build when connecting to a primary/archive/pf mailbox
@@ -1324,6 +1326,7 @@ begin {
                     $ItemView.OrderBy.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::LastModifiedTime, [Microsoft.Exchange.WebServices.Data.SortDirection]::Descending)
                 }
                 $ItemPropset= [System.Collections.ArrayList]@(
+                     [Microsoft.Exchange.WebServices.Data.ItemSchema]::ItemClass,
                      [Microsoft.Exchange.WebServices.Data.ItemSchema]::DateTimeReceived,
                      [Microsoft.Exchange.WebServices.Data.ItemSchema]::LastModifiedTime,
                      [Microsoft.Exchange.WebServices.Data.ItemSchema]::Subject,
@@ -1332,8 +1335,17 @@ begin {
                      [Microsoft.Exchange.WebServices.Data.EmailMessageSchema]::Sender,
                      [Microsoft.Exchange.WebServices.Data.AppointmentSchema]::Location,
                      [Microsoft.Exchange.WebServices.Data.AppointmentSchema]::Start,
-                     [Microsoft.Exchange.WebServices.Data.AppointmentSchema]::End
-
+                     [Microsoft.Exchange.WebServices.Data.AppointmentSchema]::End,
+                     [Microsoft.Exchange.WebServices.Data.ContactSchema]::FileAs,
+                     [Microsoft.Exchange.WebServices.Data.ContactSchema]::GivenName,
+                     [Microsoft.Exchange.WebServices.Data.ContactSchema]::SurName,
+                     [Microsoft.Exchange.WebServices.Data.ContactSchema]::DisplayName,
+                     [Microsoft.Exchange.WebServices.Data.ContactSchema]::Initials,
+                     [Microsoft.Exchange.WebServices.Data.ContactSchema]::CompanyName,
+                     [Microsoft.Exchange.WebServices.Data.ContactSchema]::JobTitle,
+                     [Microsoft.Exchange.WebServices.Data.TaskSchema]::StartDate,
+                     [Microsoft.Exchange.WebServices.Data.TaskSchema]::DueDate,
+                     [Microsoft.Exchange.WebServices.Data.TaskSchema]::Status
                 )
                 # Only retrieve these attributes when we when in relevant operating mode:
                 If(! $NoSize) {
@@ -1343,7 +1355,7 @@ begin {
                     $ItemPropset.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::Body)
                 }
                 $ItemPropset.Add( $PidTagSearchKey)
-                $ItemView.PropertySet= New-Object Microsoft.Exchange.WebServices.Data.PropertySet( [Microsoft.Exchange.WebServices.Data.BasePropertySet]::FirstClassProperties, $ItemPropSet)
+                $ItemView.PropertySet= New-Object Microsoft.Exchange.WebServices.Data.PropertySet( [Microsoft.Exchange.WebServices.Data.BasePropertySet]::IdOnly, $ItemPropSet)
 
                 $DuplicateList= [System.Collections.ArrayList]@()
                 $TotalDuplicates= 0
@@ -1366,10 +1378,11 @@ begin {
                     }
                     If ( $ItemSearchResults.Items.Count -gt 0) {
 
-                        If( $ThisMailboxMode -ne 'Quick') {
-                            # Fetch properties for found items to conduct matching
-                            $EwsService.LoadPropertiesForItems( $ItemSearchResults.Items, $ItemView.PropertySet)  
-                        }
+#                        # Already loaded during FindItem operation by specifying ItemView
+#                        If( $ThisMailboxMode -ne 'Quick') {
+#                            # Fetch properties for found items to conduct matching
+#                            $EwsService.LoadPropertiesForItems( $ItemSearchResults.Items, $ItemView.PropertySet)  
+#                        }
 
                         ForEach ( $Item in $ItemSearchResults.Items) {
 
@@ -1405,41 +1418,31 @@ begin {
                                         if ($Item.Sender) { [void]$keyElem.Add( $Item.Sender.ToString())}
                                     }
                                     'IPM.Appointment' {
-                                        $Appointment = [Microsoft.Exchange.WebServices.Data.Appointment]::Bind( $EwsService, $Item.Id)
-                                        $Appointment.load()
-                                        if ($Appointment.Location) { [void]$keyElem.Add( $Appointment.Location)}
-                                        if ($Appointment.Start) { [void]$keyElem.Add( $Appointment.Start.ToString())}
-                                        if ($Appointment.End) { [void]$keyElem.Add( $Appointment.End.ToString())}
+                                        if ($Item.Location) { [void]$keyElem.Add( $Item.Location)}
+                                        if ($Item.Start) { [void]$keyElem.Add( $Item.Start.ToString())}
+                                        if ($Item.End) { [void]$keyElem.Add( $Item.End.ToString())}
                                     }
                                     'IPM.Contact' {
                                         # For Contacts we need to bind, as phonenumbers cannot be used in a findItems call
-                                        $Contact = [Microsoft.Exchange.WebServices.Data.Contact]::Bind( $EwsService, $Item.Id)
-                                        $Contact.load()
-                                        if ($Contact.FileAs) { [void]$keyElem.Add( $Contact.FileAs)}
-                                        if ($Contact.GivenName) { [void]$keyElem.Add( $Contact.GivenName)}
-                                        if ($Contact.Surname) { [void]$keyElem.Add( $Contact.Surname)}
-                                        if ($Contact.CompanyName) { [void]$keyElem.Add( $Contact.CompanyName)}
-                                        if ($Contact.EmailAddresses[[Microsoft.Exchange.WebServices.Data.EmailAddressKey]::EmailAddress1]) { [void]$keyElem.Add( $Contact.EmailAddresses[[Microsoft.Exchange.WebServices.Data.EmailAddressKey]::EmailAddress1])}
-                                        if ($Contact.PhoneNumbers[[Microsoft.Exchange.WebServices.Data.PhoneNumberKey]::BusinessPhone]) { [void]$keyElem.Add( $Contact.PhoneNumbers[[Microsoft.Exchange.WebServices.Data.PhoneNumberKey]::BusinessPhone])}
-                                        if ($Contact.PhoneNumbers[[Microsoft.Exchange.WebServices.Data.PhoneNumberKey]::MobilePhone]) { [void]$keyElem.Add( $Contact.PhoneNumbers[[Microsoft.Exchange.WebServices.Data.PhoneNumberKey]::MobilePhone])}
-                                        if ($Contact.PhoneNumbers[[Microsoft.Exchange.WebServices.Data.PhoneNumberKey]::HomePhone]) { [void]$keyElem.Add( $Contact.PhoneNumbers[[Microsoft.Exchange.WebServices.Data.PhoneNumberKey]::HomePhone])}
+                                        if ($Item.FileAs) { [void]$keyElem.Add( $Item.FileAs)}
+                                        if ($Item.GivenName) { [void]$keyElem.Add( $Item.GivenName)}
+                                        if ($Item.Surname) { [void]$keyElem.Add( $Item.Surname)}
+                                        if ($Item.CompanyName) { [void]$keyElem.Add( $Item.CompanyName)}
+                                        if ($Item.DisplayName) { [void]$keyElem.Add( $Item.Displayname)}
+                                        if ($Item.Initials) { [void]$keyElem.Add( $Item.Initials)}
+                                        if ($Item.JobTitle) { [void]$keyElem.Add( $Item.JobTitle)}                  
                                     }
                                     'IPM.Task' {
-                                        $Task= [Microsoft.Exchange.WebServices.Data.Task]::Bind( $EwsService, $Item.Id)
-                                        $Task.load()
-                                        if ($Task.Subject) { [void]$keyElem.Add( $Task.Subject)}
-                                        if ($Task.StartDate) {[void]$keyElem.Add( $Task.StartDate.ToString())}
-                                        if ($Task.DueDate) { [void]$keyElem.Add( $Task.DueDate.ToString())}
-                                        if ($Task.Status) { [void]$keyElem.Add( $Task.Status)}
+                                        if ($Item.Subject) { [void]$keyElem.Add( $Item.Subject)}
+                                        if ($Item.StartDate) {[void]$keyElem.Add( $Item.StartDate.ToString())}
+                                        if ($Item.DueDate) { [void]$keyElem.Add( $Item.DueDate.ToString())}
+                                        if ($Item.Status) { [void]$keyElem.Add( $Item.Status)}
                                     }
                                     'IPM.Post' {
-                                        $ItemFull= [Microsoft.Exchange.WebServices.Data.Item]::Bind( $EwsService, $Item.Id)
-                                        if ($ItemFull.Subject) { [void]$keyElem.Add( $ItemFull.Subject)}
+                                        if ($Item.DateTimeReceived) { [void]$keyElem.Add( $Item.DateTimeReceived.ToString())}
                                     }
                                     Default {
-                                        $ItemFull= [Microsoft.Exchange.WebServices.Data.Item]::Bind( $EwsService, $Item.Id)
                                         if ($Item.DateTimeReceived) { [void]$keyElem.Add( $ItemFull.DateTimeReceived.ToString())}
-                                        if ($ItemFull.Subject) { [void]$keyElem.Add( $ItemFull.Subject) }
                                     }
                                 }
                             }
