@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 2.44, August 7th, 2023
+    Version 2.45, February 20th, 2025
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -28,7 +28,7 @@
     .NOTES
     EWS.WebServices.Managed.Api 2.2 or up is required (see https://eightwone.com/2020/10/05/ews-webservices-managed-api)
     For OAuth, Microsoft Authentication are required.
-    
+
     Search order for DLL's is script Folder then installed packages.
 
     Revision History
@@ -79,12 +79,12 @@
     1.86    Fixed issue with processing delegate mailboxes using Full Access permissions
     1.87    Fixed Examples
     1.88    Fixed bug in folder selection process
-    1.89    Added code to leverage installed package EWS.WebServices.Managed.Api 
+    1.89    Added code to leverage installed package EWS.WebServices.Managed.Api
     2.00    Added OAuth authentication options
             Changed DLL loading routing (EWS Managed API + MSAL)
             Not trusting self-signed certs by default; added -TrustAll switch to trust all certs
             Added pipeline proper processing with begin/process/end
-            Replaced all strings with var-subsitution with -f 
+            Replaced all strings with var-subsitution with -f
             Added certificate authentication example
             Small performance tweaks here and there
     2.01    Fixed verification of loading Microsoft.Identity.Client
@@ -114,13 +114,15 @@
             Increased type binding for some parameters
             Removed unused myEWSFind-Items function
             Reduced FindItems returnset to required properties
-            Setting TimeZone when connecting, possibly resolves 'Object reference not set to an instance of an object'  
-    2.41    Further optimized item retrieval, should see significant performance improvements (300%-400%, but YMMV) 
+            Setting TimeZone when connecting, possibly resolves 'Object reference not set to an instance of an object'
+    2.41    Further optimized item retrieval, should see significant performance improvements (300%-400%, but YMMV)
     2.42    Removed unneeded call to fetch Item properties
             Changed Appointment fetching removing obsolete bind/load with performance penalty
             Changed Contact property set to compare so we can use FindItem
     2.43    Fixed typo causing error forn mon-standard items
     2.44    Changed OAuth to use dummy creds to prevent 'Credentials are required to make a service request' issue
+    2.45    Fixed 'The property Body cannot be used in FindItem requests' using mode Body
+            Removed fetch of unused attributes when using mode Quick
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -132,14 +134,14 @@
     .PARAMETER NoSCP
     Will instruct to skip SCP lookups in Active Directory when using Autodiscover.
 
-    .PARAMETER ExchangeSchema 
+    .PARAMETER ExchangeSchema
     Specify Exchange schema to use when connecting to Exchange server or Exchange Online.
-    Options are Exchange2007_SP1, Exchange2010, Exchange2010_SP1, Exchange2010_SP2, Exchange2013, Exchange2013_SP1, 
-    Exchange2015 or Exchange2016. Default is Exchange2013_SP1, except when you specified the server parameter as 
+    Options are Exchange2007_SP1, Exchange2010, Exchange2010_SP1, Exchange2010_SP2, Exchange2013, Exchange2013_SP1,
+    Exchange2015 or Exchange2016. Default is Exchange2013_SP1, except when you specified the server parameter as
     'outlook.office365.com', in which case it will be set to Exchange2016 for Exchange Online compatibility reasons.
     If you do not specify server, and you get "The property Hashtags is valid only for Exchange Exchange2015 or later versions",
     you can specify Exchange2015 (or Exchange 2016) as ExchangeSchema.
-    
+
     .PARAMETER Impersonation
     When specified, uses impersonation when accessing the mailbox, otherwise account specified with Credentials is
     used. When using OAuth authentication with a registered app, you don't need to specify Impersonation.
@@ -178,7 +180,7 @@
               - Mail: Subject, Internet Message ID, DateTimeSent,
                 DateTimeReceived, Sender, Size
               - Other: Subject, DateTimeReceived, Size
-    - Body:   Removes duplicate items with matching Body attribute.
+    - Body:   Removes duplicates with matching PidTagBody (Body text).
 
     When NoSize is used in Full mode, Size is not used as criteria.
 
@@ -222,7 +224,7 @@
     \*FolderA\*         \TopFolderA, \TopFolderA\FolderA, \TopFolderA\FolderB, \TopFolderA\FolderA\SubFolderA, \TopFolderA\FolderA\SubFolderB, \TopFolderB\FolderA
     \*\FolderA          \TopFolderA\FolderA, \TopFolderB\FolderA
 
-    For mailbox processing, you can also use well-known folders, by using this format: #WellKnownFolderName#, 
+    For mailbox processing, you can also use well-known folders, by using this format: #WellKnownFolderName#,
     e.g. #Inbox#. Supported are #Calendar#, #Contacts#, #Inbox#, #Notes#, #SentItems#, #Tasks#, #JunkEmail#, #Drafts#
     and #DeletedItems#. The script uses the currently configured Well-Known Folder of the mailbox to be processed.
 
@@ -242,9 +244,9 @@
       Note that if there is an online archive, this will be treated as a seperate mailbox.
     - MailboxArchive - performs duplicate cleanup against whole mailbox and - if present - online archive.
       Items are evaluated in mailbox-archive order, e.g. items found in the mailbox are retained over duplicates in archive.
-    - MultiMailbox - When passing multiple identities, performs duplicate cleanup over multiple mailboxes. Items 
+    - MultiMailbox - When passing multiple identities, performs duplicate cleanup over multiple mailboxes. Items
       are evaluated sequentially, e.g. items found in the first mailbox are considered duplicate when they are located
-      in the second or later mailboxes. 
+      in the second or later mailboxes.
 
     .PARAMETER PriorityFolders
     Determines which folders have priority over other folders, identifying items in these folders first when
@@ -273,27 +275,27 @@
 
     .PARAMETER Credentials
     Specify credentials to use with Basic Authentication. Credentials can be set using $Credentials= Get-Credential
-    This parameter is mutually exclusive with CertificateFile, CertificateThumbprint and Secret. 
+    This parameter is mutually exclusive with CertificateFile, CertificateThumbprint and Secret.
 
     .PARAMETER CertificateThumbprint
     Specify the thumbprint of the certificate to use with OAuth authentication. The certificate needs
     to reside in the personal store. When using OAuth, providing TenantId and ClientId is mandatory.
-    This parameter is mutually exclusive with CertificateFile, Credentials and Secret. 
+    This parameter is mutually exclusive with CertificateFile, Credentials and Secret.
 
     .PARAMETER CertificateFile
     Specify the .pfx file containing the certificate to use with OAuth authentication. When a password is required,
     you will be prompted or you can provide it using CertificatePassword.
-    When using OAuth, providing TenantId and ClientId is mandatory. 
-    This parameter is mutually exclusive with CertificateFile, Credentials and Secret. 
+    When using OAuth, providing TenantId and ClientId is mandatory.
+    This parameter is mutually exclusive with CertificateFile, Credentials and Secret.
 
     .PARAMETER CertificatePassword
-    Sets the password to use with the specified .pfx file. The provided password needs to be a secure string, 
+    Sets the password to use with the specified .pfx file. The provided password needs to be a secure string,
     eg. -CertificatePassword (ConvertToSecureString -String 'P@ssword' -Force -AsPlainText)
 
     .PARAMETER Secret
     Specifies the client secret to use with OAuth authentication. The secret needs to be provided as a secure string.
-    When using OAuth, providing TenantId and ClientId is mandatory. 
-    This parameter is mutually exclusive with CertificateFile, Credentials and CertificateThumbprint. 
+    When using OAuth, providing TenantId and ClientId is mandatory.
+    This parameter is mutually exclusive with CertificateFile, Credentials and CertificateThumbprint.
 
     .EXAMPLE
     .\Remove-DuplicateItems.ps1 -Identity Francis -Type All -Impersonation -DeleteMode SoftDelete -Mode Quick -Verbose
@@ -319,7 +321,7 @@
     $Secret= Read-Host 'Secret' -AsSecureString
     Import-Csv Users.Csv | .\Remove-DuplicateItems.ps1 -Server outlook.office365.com -IncludeFolders '#Inbox#\*','\Projects\*' -ExcludeFolders 'Keep Out' -PriorityFolders '*Important*' -CleanupMode Mailbox --TenantId '1ab81a53-2c16-4f28-98f3-fd251f0459f3' -ClientId 'ea76025c-592d-43f1-91f4-2dec7161cc59' -Secret $Secret
 
-    Remove duplicate items from mailboxes identified by CSV file in Office365 bypassing AutoDiscover, limiting operation against the Inbox, and 
+    Remove duplicate items from mailboxes identified by CSV file in Office365 bypassing AutoDiscover, limiting operation against the Inbox, and
     top Projects folder, and all of their subfolders, but excluding any folder named Keep Out. Duplicates are checked over all folders, but priority is
     given to folders containing the word Important, causing items in those folders to be kept over items in other folders when duplicates are found.
     OAuth authentication is performed against indicated tenant <TenantID> using registered App <ClientID> and App secret entered.
@@ -331,465 +333,465 @@
     ConfirmImpact= 'High'
 )]
 param(
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'BasicAuth')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'DefaultAuth')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'BasicAuth')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'BasicAuthArchiveOnly')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Position= 0, Mandatory= $true, ValueFromPipelineByPropertyName= $true, ParameterSetName= 'BasicAuthPublicFolders')]
     [alias('Mailbox')]
     [string[]]$Identity,
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')]
     [ValidateSet( 'Mail', 'Calendar', 'Contacts', 'Tasks', 'Notes', 'All')]
     [string]$Type= 'All',
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')]
     [ValidateSet( 'Oldest', 'Newest')]
     [string]$Retain= 'Newest',
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')]
     [ValidateSet( 'Exchange2007_SP1', 'Exchange2010', 'Exchange2010_SP1', 'Exchange2010_SP2', 'Exchange2013', 'Exchange2013_SP1', 'Exchange2015', 'Exchange2016' )]
     [string]$ExchangeSchema='Exchange2013_SP1',
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')]
     [string]$Server,
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')]
     [switch]$NoSCP,
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')]
     [switch]$Impersonation,
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')]
     [ValidateSet( 'HardDelete', 'SoftDelete', 'MoveToDeletedItems')]
     [string]$DeleteMode= 'SoftDelete',
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')]
     [ValidateSet( 'Quick', 'Full', 'Body')]
     [string]$Mode= 'Quick',
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'BasicAuthMailboxOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'BasicAuthMailboxOnly')]
     [switch]$MailboxOnly,
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'BasicAuthArchiveOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'BasicAuthArchiveOnly')]
     [switch]$ArchiveOnly,
-    [parameter( Mandatory= $true, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Mandatory= $true, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Mandatory= $true, ParameterSetName= 'BasicAuthPublicFolders')]
     [switch]$PublicFolders,
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
     [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')]
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')]
     [string[]]$IncludeFolders,
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
-    [string[]]$ExcludeFolders,
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
     [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')]
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')]
+    [string[]]$ExcludeFolders,
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')]
     [ValidateSet( 'Folder', 'Mailbox', 'MailboxArchive', 'MultiMailbox')]
     [string]$CleanupMode= 'Folder',
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')]
     [string[]]$PriorityFolders,
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')]
     [switch]$NoSize,
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')]
     [switch]$Force,
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')]
     [switch]$NoProgressBar,
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')]
     [switch]$Report,
-    [parameter( Mandatory= $true, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'DefaultAuthPublicFolders')] 
+    [parameter( Mandatory= $true, ParameterSetName= 'DefaultAuth')]
+    [parameter( Mandatory= $true, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'DefaultAuthPublicFolders')]
     [Switch]$UseDefaultCredentials,
-    [parameter( Mandatory= $true, ParameterSetName= 'BasicAuth')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Mandatory= $true, ParameterSetName= 'BasicAuth')]
+    [parameter( Mandatory= $true, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'BasicAuthArchiveOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'BasicAuthPublicFolders')]
     [System.Management.Automation.PsCredential]$Credentials,
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretPublicFolders')]
     [System.Security.SecureString]$Secret,
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbPublicFolders')]
     [String]$CertificateThumbprint,
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFilePublicFolders')] 
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFilePublicFolders')]
     [ValidateScript({ Test-Path -Path $_ -PathType Leaf})]
     [String]$CertificateFile,
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')]
     [System.Security.SecureString]$CertificatePassword,
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretPublicFolders')]
     [string]$TenantId,
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $true, ParameterSetName= 'OAuthCertSecretPublicFolders')]
     [string]$ClientId,
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')] 
-    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')] 
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'DefaultAuthPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumb')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFile')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecret')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuth')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthMailboxOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFileArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthArchiveOnly')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertThumbPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertFilePublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'OAuthCertSecretPublicFolders')]
+    [parameter( Mandatory= $false, ParameterSetName= 'BasicAuthPublicFolders')]
     [switch]$TrustAll
 )
 begin {
@@ -1139,7 +1141,7 @@ begin {
         $critErr= $false
         Do {
             Try {
-                $explicitFolder= New-Object -TypeName Microsoft.Exchange.WebServices.Data.FolderId( [Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::$WellKnownFolderName, $emailAddress)  
+                $explicitFolder= New-Object -TypeName Microsoft.Exchange.WebServices.Data.FolderId( [Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::$WellKnownFolderName, $emailAddress)
                 $res= [Microsoft.Exchange.WebServices.Data.Folder]::Bind( $EwsService, $explicitFolder)
                 $OpSuccess= $true
                 if( $ShowVersion) {
@@ -1206,7 +1208,7 @@ begin {
         $FolderView= New-Object Microsoft.Exchange.WebServices.Data.FolderView( $MaxFolderBatchSize)
         $FolderView.Traversal= [Microsoft.Exchange.WebServices.Data.FolderTraversal]::Shallow
         $folderPropset= @( [Microsoft.Exchange.WebServices.Data.FolderSchema]::DisplayName, [Microsoft.Exchange.WebServices.Data.FolderSchema]::FolderClass )
-        $FolderView.PropertySet= new-object Microsoft.Exchange.WebServices.Data.PropertySet([Microsoft.Exchange.WebServices.Data.BasePropertySet]::FirstClassProperties, $folderPropSet)  
+        $FolderView.PropertySet= new-object Microsoft.Exchange.WebServices.Data.PropertySet([Microsoft.Exchange.WebServices.Data.BasePropertySet]::FirstClassProperties, $folderPropSet)
         $FolderSearchCollection= New-Object Microsoft.Exchange.WebServices.Data.SearchFilter+SearchFilterCollection( [Microsoft.Exchange.WebServices.Data.LogicalOperator]::And)
         If ( $Type -ne 'All') {
             $FolderSearchClass= (@{Mail= 'IPF.Note'; Calendar= 'IPF.Appointment'; Contacts= 'IPF.Contact'; Tasks= 'IPF.Task'; Notes= 'IPF.StickyNotes'})[$Type]
@@ -1220,7 +1222,7 @@ begin {
             Else {
                 $FolderSearchResults= myEWSFind-FoldersNoSearch -EwsService $EwsService -Folder $Folder -FolderView $FolderView
             }
-            
+
             ForEach ( $FolderItem in $FolderSearchResults) {
 
                 $FolderPath= '{0}\{1}' -f $CurrentPath, $FolderItem.DisplayName
@@ -1296,6 +1298,7 @@ begin {
         $FoldersProcessed= 0
         $TimeProcessingStart= Get-Date
         $PidTagSearchKey= New-Object Microsoft.Exchange.WebServices.Data.ExtendedPropertyDefinition( 0x300B, [Microsoft.Exchange.WebServices.Data.MapiPropertyType]::Binary)
+        $PidTagBody= New-Object Microsoft.Exchange.WebServices.Data.ExtendedPropertyDefinition( 0x1000, [Microsoft.Exchange.WebServices.Data.MapiPropertyType]::String)
 
         # Build list of folders to process
         Write-Verbose ('Collecting folders to process..')
@@ -1354,9 +1357,11 @@ begin {
                     $ItemPropset.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::Size)
                 }
                 If( $ThisMailboxMode -eq 'Body') {
-                    $ItemPropset.Add( [Microsoft.Exchange.WebServices.Data.ItemSchema]::Body)
+                    $ItemPropset.Add( $PidTagBody)
                 }
-                $ItemPropset.Add( $PidTagSearchKey)
+                If( $ThisMailboxMode -eq 'Quick') {
+                    $ItemPropset.Add( $PidTagSearchKey)
+                }
                 $ItemView.PropertySet= New-Object Microsoft.Exchange.WebServices.Data.PropertySet( [Microsoft.Exchange.WebServices.Data.BasePropertySet]::IdOnly, $ItemPropSet)
 
                 $DuplicateList= [System.Collections.ArrayList]@()
@@ -1383,7 +1388,7 @@ begin {
 #                        # Already loaded during FindItem operation by specifying ItemView
 #                        If( $ThisMailboxMode -ne 'Quick') {
 #                            # Fetch properties for found items to conduct matching
-#                            $EwsService.LoadPropertiesForItems( $ItemSearchResults.Items, $ItemView.PropertySet)  
+#                            $EwsService.LoadPropertiesForItems( $ItemSearchResults.Items, $ItemView.PropertySet)
 #                        }
 
                         ForEach ( $Item in $ItemSearchResults.Items) {
@@ -1392,7 +1397,17 @@ begin {
                             $TotalFolder++
                             $TotalMatch++
                             If( $ThisMailboxMode -eq 'Body') {
-                                # Use PR_MESSAGE_BODY for matching duplicates
+                                # Use PR_BODY for matching duplicates
+                                $PropVal= $null
+                                if ( $Item.TryGetProperty( $PidTagBody, [ref]$PropVal)) {
+                                    # Use the hash of item body
+                                    $keyElem= Get-Hash $PropVal
+                                }
+                                Else {
+                                    Write-Debug 'Cannot access or missing PidTagBody property, falling back to property mode (Full)'
+                                    $ThisMailboxMode= 'Full'
+                                }
+                                $Item.ExtendedPropertyDefinition
                                 $keyElem= [System.Collections.ArrayList]@( $Item.Body)
                             }
                             If( $ThisMailboxMode -eq 'Quick') {
@@ -1432,7 +1447,7 @@ begin {
                                         if ($Item.CompanyName) { [void]$keyElem.Add( $Item.CompanyName)}
                                         if ($Item.DisplayName) { [void]$keyElem.Add( $Item.Displayname)}
                                         if ($Item.Initials) { [void]$keyElem.Add( $Item.Initials)}
-                                        if ($Item.JobTitle) { [void]$keyElem.Add( $Item.JobTitle)}                  
+                                        if ($Item.JobTitle) { [void]$keyElem.Add( $Item.JobTitle)}
                                     }
                                     'IPM.Task' {
                                         if ($Item.Subject) { [void]$keyElem.Add( $Item.Subject)}
@@ -1547,7 +1562,7 @@ begin {
             Write-Verbose ('Cleaning unique list (Finished Mailbox)')
             $global:UniqueList= [System.Collections.ArrayList]@()
         }
-        
+
         If ( $ProcessingOK) {
             $TimeProcessingDiff= (Get-Date) - $TimeProcessingStart
             $Speed= [int]( $TotalMatch / $TimeProcessingDiff.TotalSeconds * 60)
@@ -1563,13 +1578,13 @@ begin {
     # Override ExchangeSchema when connecting to EXO
     If( $Server -eq 'outlook.office365.com') {
         $ExchangeSchema= 'Exchange2016'
-    } 
- 
+    }
+
     Try {
         $EwsService= [Microsoft.Exchange.WebServices.Data.ExchangeService]::new( [Microsoft.Exchange.WebServices.Data.ExchangeVersion]::$ExchangeSchema, [System.TimeZoneInfo]::FindSystemTimeZoneById( $TZ.Id))
     }
     Catch {
-        Throw( 'Problem initializing Exchange Web Services using schema {0} and TimeZone {1}' -f $ExchangeSchema, $TZ.Id)
+        Throw( 'Problem initializing Exchange Web Services using schema {0} and TimeZone {1}: {2}' -f $ExchangeSchema, $TZ.Id, $_.Exception.Message)
     }
 
     If( $Credentials -or $UseDefaultCredentials) {
@@ -1598,10 +1613,10 @@ begin {
 
         If( $CertificateThumbprint -or $CertificateFile) {
             If( $CertificateFile) {
-                
+
                 # Use certificate from file using absolute path to authenticate
                 $CertificateFile= (Resolve-Path -Path $CertificateFile).Path
-                
+
                 Try {
                     If( $CertificatePassword) {
                         $X509Certificate2= [System.Security.Cryptography.X509Certificates.X509Certificate2]::new( $CertificateFile, [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR( $CertificatePassword)))
@@ -1627,7 +1642,7 @@ begin {
             }
             Write-Verbose ('Will use certificate {0}, issued by {1} and expiring {2}' -f $X509Certificate2.Thumbprint, $X509Certificate2.Issuer, $X509Certificate2.NotAfter)
             $App= [Microsoft.Identity.Client.ConfidentialClientApplicationBuilder]::Create( $ClientId).WithCertificate( $X509Certificate2).withTenantId( $TenantId).Build()
-               
+
         }
         Else {
             # Use provided secret to authenticate
@@ -1678,7 +1693,7 @@ Process {
             $EwsService.HttpHeaders.Clear()
             $EwsService.HttpHeaders.Add( 'X-AnchorMailbox', $EmailAddress)
         }
-            
+
         If ($Server) {
             $EwsUrl= 'https://{0}/EWS/Exchange.asmx' -f $Server
             Write-Verbose ('Using Exchange Web Services URL {0}' -f $EwsUrl)
@@ -1697,7 +1712,7 @@ Process {
             }
             $ErrorActionPreference= 'Continue'
             Write-Verbose ('Using EWS endpoint {0}' -f $EwsService.Url)
-        } 
+        }
 
         # Construct search filters
         Write-Verbose 'Constructing folder matching rules'
@@ -1707,7 +1722,7 @@ Process {
 
         If ( $PublicFolders.IsPresent) {
             try {
-                $RootFolder= myEWSBind-WellKnownFolder -EwsService $EwsService -WellKnownFolderName 'PublicFoldersRoot' 
+                $RootFolder= myEWSBind-WellKnownFolder -EwsService $EwsService -WellKnownFolderName 'PublicFoldersRoot'
                 If ($null -ne $RootFolder) {
                     Write-Verbose ('Processing Public Folders')
                     If (! ( Process-Mailbox -Folder $RootFolder -Desc 'Public Folders' -IncludeFilter $IncludeFilter -ExcludeFilter $ExcludeFilter -PriorityFilter $PriorityFilter -EwsService $EwsService -Type $Type -emailAddress $emailAddress)) {
