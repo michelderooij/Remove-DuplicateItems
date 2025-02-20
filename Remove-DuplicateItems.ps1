@@ -9,7 +9,7 @@
     ENTIRE RISK OF THE USE OR THE RESULTS FROM THE USE OF THIS CODE REMAINS
     WITH THE USER.
 
-    Version 2.45, February 20th, 2025
+    Version 2.46, February 21st, 2025
 
     .DESCRIPTION
     This script will scan each folder of a given primary mailbox and personal archive (when
@@ -123,6 +123,7 @@
     2.44    Changed OAuth to use dummy creds to prevent 'Credentials are required to make a service request' issue
     2.45    Fixed 'The property Body cannot be used in FindItem requests' using mode Body
             Removed fetch of unused attributes when using mode Quick
+    2.46    Fixed counting processed items
 
     .PARAMETER Identity
     Identity of the Mailbox. Can be CN/SAMAccountName (for on-premises) or e-mail format (on-prem & Office 365)
@@ -1495,8 +1496,6 @@ begin {
             Else {
                 Write-Debug 'Skipping Deleted Items folder'
             }
-
-            $TotalMatch += $ItemSearchResults.TotalCount
 
             If ( ($DuplicateList.Count -gt 0) -and ($Force -or $PSCmdlet.ShouldProcess( ('Remove {0} items from {1}' -f $DuplicateList.Count, $SubFolder.Name)))) {
                 try {
